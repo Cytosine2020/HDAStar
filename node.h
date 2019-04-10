@@ -39,8 +39,8 @@ typedef struct node_t {
     int y;          /* Y coordinate, starting from 0. */
     int gs;         /* A* g-score. */
     int fs;         /* A* f-score. */
-    mark_t mark;    /* Node type. */
     int heap_id;    /* Position on min heap, used by updating. */
+    mark_t mark;    /* Node type. */
     bool opened;    /* Has been discovered? */
     bool closed;    /* Has been closed? */
     struct node_t *parent;  /* Parent node along the path. */
@@ -52,7 +52,5 @@ node_t *node_init(int x, int y, mark_t mark);
 void node_destroy(node_t *n);
 
 bool node_less(node_t *n1, node_t *n2);
-
-#define get_parent(heap, node)  (heap->nodes[node->heap_id / 2])
 
 #endif

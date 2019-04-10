@@ -1,5 +1,3 @@
-maze-233.txt
-maze-4821.txt
+maze-*.txt
 .idea/*
 cmake-build*/*
-

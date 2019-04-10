@@ -122,4 +122,3 @@ int main(int argc, char *argv[]) {
     maze_destroy(maze);
     return 0;
 }
-
