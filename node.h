@@ -21,17 +21,6 @@ typedef int bool;
 #define false (0)
 
 /**
- * Explicitly defines the four different node types.
- *   START: start point
- *   GOAL:  goal point
- *   WALL:  wall block, cannot step on / move across
- *   NONE:  normal blank point
- */
-typedef enum {
-    START, GOAL, WALL, NONE
-} mark_t;
-
-/**
  * Structure of a block cell node.
  */
 typedef struct node_t {
@@ -40,17 +29,18 @@ typedef struct node_t {
     int gs;         /* A* g-score. */
     int fs;         /* A* f-score. */
     int heap_id;    /* Position on min heap, used by updating. */
-    mark_t mark;    /* Node type. */
     bool opened;    /* Has been discovered? */
     bool closed;    /* Has been closed? */
     struct node_t *parent;  /* Parent node along the path. */
 } node_t;
 
 /* Function prototypes. */
-node_t *node_init(int x, int y, mark_t mark);
-
-void node_destroy(node_t *n);
+node_t *node_init(node_t *node, int x, int y);
 
 bool node_less(node_t *n1, node_t *n2);
+
+node_t *alloc_node();
+
+void release_pool();
 
 #endif

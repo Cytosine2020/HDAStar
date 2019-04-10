@@ -22,23 +22,24 @@ typedef struct maze_t {
     int rows;           /* Number of rows. */
     int cols;           /* Number of cols. */
     node_t **nodes;     /* Array of node pointers. */
-    node_t *start;      /* Start node pointer. */
-    node_t *goal;       /* Goal node pointer. */
+    node_t start;      /* Start node pointer. */
+    node_t goal;       /* Goal node pointer. */
+    node_t wall;
     int fd;
-    void *memmap;
-    size_t memsize;
+    void *mem_map;
+    size_t mem_size;
     char **lines;
 } maze_t;
 
 /* Function prototypes. */
-maze_t *maze_init(char *filename);
+void maze_init(maze_t *maze, char *filename);
 
 void maze_destroy(maze_t *maze);
 
-void maze_set_cell(maze_t *maze, int x, int y, mark_t mark);
+node_t *maze_set_cell(maze_t *maze, int x, int y);
 
 node_t *maze_get_cell(maze_t *maze, int x, int y);
 
-void maze_print_step(maze_t *maze, node_t *node);
+char *get_char_loc(maze_t *maze, int x, int y);
 
 #endif

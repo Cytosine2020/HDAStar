@@ -27,7 +27,7 @@ typedef struct heap_t {
 } heap_t;
 
 /* Function prototypes. */
-heap_t *heap_init(void);
+void heap_init(heap_t *heap);
 
 void heap_destroy(heap_t *heap);
 

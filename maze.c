@@ -20,99 +20,66 @@
 #include "node.h"
 
 /**
- * Maps a character C to its corresponding mark type. Returns the mark.
- */
-static mark_t char_to_mark(char character) {
-    switch (character) {
-        case '#':
-            return WALL;
-        case '@':
-            return START;
-        case '%':
-            return GOAL;
-        default:
-            return NONE;
-    }
-}
-
-static char *next_line(char *ptr) {
-    int i = 0;
-    for (i = 0; ptr[i] != '\n'; i++);
-    return ptr + i + 1;
-}
-
-/**
  * Initialize a maze from a formatted source file named FILENAME. Returns the
  *   pointer to the new maze.
  */
-maze_t *maze_init(char *filename) {
-    int rows, cols, i, j, character;
-    maze_t *maze = malloc(sizeof(maze_t));
+void maze_init(maze_t *maze, char *filename) {
+    int rows, cols;
+    size_t size;
+    char *file_ptr;
     struct stat status;
-    char *file_ptr, *file_ptr_end;
 
     /* Open the source file and read in number of rows & cols. */
     maze->fd = open(filename, O_RDWR);
     assert(maze->fd != -1);
     assert(fstat(maze->fd, &status) != -1);
-    maze->memsize = (size_t) status.st_size;
-    maze->memmap = mmap(NULL, (size_t) status.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, maze->fd, 0);
+    maze->mem_size = (size_t) status.st_size;
+    maze->mem_map = mmap(NULL, (size_t) status.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, maze->fd, 0);
 
     /* at maze_print_step.*/
-    assert(sscanf((char *) maze->memmap, "%d %d\n", &rows, &cols) == 2);
+    assert(sscanf((char *) maze->mem_map, "%d %d\n", &rows, &cols) == 2);
     maze->rows = rows;
     maze->cols = cols;
+
+    /* initial lines. */
     maze->lines = malloc(rows * sizeof(char *));
     assert(maze->lines != NULL);
     memset(maze->lines, 0, rows * sizeof(char *));
 
-    file_ptr = next_line(maze->memmap);
-    file_ptr_end = (char *) maze->memmap + status.st_size;
+    file_ptr = maze->mem_map;
+    while(*(file_ptr++) != '\n');
+    maze->lines[0] = file_ptr;
 
-    /* Allocate space for all nodes (cells) inside the maze, then read them
-       in from the source file. The maze records all pointers to its nodes
-       in an array NODES. */
-    maze->nodes = malloc(rows * cols * sizeof(node_t *));
-    for (i = 0; i < rows; ++i) {
-        maze->lines[i] = file_ptr;
-        for (j = 0; j < cols; ++j) {
-            mark_t mark = char_to_mark(*(file_ptr++));
-            maze_set_cell(maze, i, j, mark);
-            if (mark == START)
-                maze->start = maze_get_cell(maze, i, j);
-            else if (mark == GOAL)
-                maze->goal = maze_get_cell(maze, i, j);
-        }
-        character = '\0';
-        while (character != '\n' && file_ptr < file_ptr_end)
-            character = *(file_ptr++);
-    }
+    /* Allocate space for all nodes (cells) inside the maze. */
+    size = rows * cols * sizeof(node_t *);
+    maze->nodes = malloc(size);
+    memset(maze->nodes, 0, size);
 
-    return maze;
+    node_init(&maze->start, 1, 0);
+    node_init(&maze->goal, rows - 2, cols - 1);
+    node_init(&maze->wall, -1, -1);
 }
 
 /**
  * Delete the memory occupied by the maze M.
  */
 void maze_destroy(maze_t *maze) {
-    int i, j;
-    for (i = 0; i < maze->rows; ++i)
-        for (j = 0; j < maze->cols; ++j)
-            free(maze->nodes[i * maze->cols + j]);
+    release_pool();
     free(maze->nodes);
     free(maze->lines);
-    msync(maze->memmap, maze->memsize, MS_ASYNC);
-    munmap(maze->memmap, maze->memsize);
+    msync(maze->mem_map, maze->mem_size, MS_ASYNC);
+    munmap(maze->mem_map, maze->mem_size);
     close(maze->fd);
-    free(maze);
 }
 
 /**
- * Initialize a cell in maze M at position (X, Y) to be a MARK-type cell.
+ * Initialize a cell in maze M at position (X, Y) to be a non-WALL.
  */
-void maze_set_cell(maze_t *maze, int x, int y, mark_t mark) {
-    assert(x >= 0 && x < maze->rows && y >= 0 && y < maze->cols);
-    maze->nodes[x * maze->cols + y] = node_init(x, y, mark);
+node_t *maze_set_cell(maze_t *maze, int x, int y) {
+    node_t *node;
+    if (*get_char_loc(maze, x, y) == '#') node = &(maze->wall);
+    else node = node_init(alloc_node(), x, y);
+    return maze->nodes[x * maze->cols + y] = node;
 }
 
 /**
@@ -120,15 +87,27 @@ void maze_set_cell(maze_t *maze, int x, int y, mark_t mark) {
  *   specified cell.
  */
 node_t *maze_get_cell(maze_t *maze, int x, int y) {
-    if (x < 0 || x >= maze->rows || y < 0 || y >= maze->cols) /* Returns NULL if exceeds boundary. */
-        return NULL;
-    return maze->nodes[x * maze->cols + y];   /* Notice the row-major order. */
+    node_t *node = maze->nodes[x * maze->cols + y];
+    if (node == NULL) node = maze_set_cell(maze, x, y);
+    return node;
 }
 
 /**
  * Sets the position of node N in maze M in the source file to be "*",
  *   indicating it is an intermediate step along the shortest path.
  */
-void maze_print_step(maze_t *maze, node_t *node) {
-    maze->lines[node->x][node->y] = '*';
+char *get_char_loc(maze_t *maze, int x, int y) {
+    char * line = maze->lines[x];
+    if (line == NULL) {
+        int i;
+        char *file_ptr;
+        for (i = 0; maze->lines[i] == NULL; i++);
+        file_ptr = maze->lines[i - 1];
+        for(; i <= x; i++) {
+            file_ptr += maze->cols;
+            while(*(file_ptr++) != '\n');
+            maze->lines[i] = file_ptr;
+        }
+    }
+    return line + y;
 }

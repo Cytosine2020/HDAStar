@@ -43,16 +43,16 @@
  * Fetch the neighbour located at direction DIRECTION of node N, in the
  *   maze M. Returns pointer to the neighbour node.
  */
-static node_t *fetch_neighbour(maze_t *m, node_t *n, int direction) {
+static node_t *fetch_neighbour(maze_t *maze, node_t *node, int direction) {
     switch (direction) {
         case 0:
-            return maze_get_cell(m, n->x, n->y - 1);
+            return maze_get_cell(maze, node->x, node->y - 1);
         case 1:
-            return maze_get_cell(m, n->x + 1, n->y);
+            return maze_get_cell(maze, node->x + 1, node->y);
         case 2:
-            return maze_get_cell(m, n->x, n->y + 1);
+            return maze_get_cell(maze, node->x, node->y + 1);
         case 3:
-            return maze_get_cell(m, n->x - 1, n->y);
+            return maze_get_cell(maze, node->x - 1, node->y);
         default:
             return NULL;
     }
@@ -63,26 +63,27 @@ static node_t *fetch_neighbour(maze_t *m, node_t *n, int direction) {
  *   including I/O. Parallel and optimize as much as you can.
  */
 int main(int argc, char *argv[]) {
-    maze_t *maze;
-    heap_t *heap;
+    maze_t maze;
+    heap_t heap;
     node_t *node;
+    int count = 0;
 
     assert(argc == 2);  /* Must have given the source file name. */
 
     /* Initializations. */
-    maze = maze_init(argv[1]);
-    heap = heap_init();
-    maze->start->gs = 0;
-    maze->start->fs = heuristic(maze->start, maze->goal);
-    heap_insert(heap, maze->start);
+    maze_init(&maze, argv[1]);
+    heap_init(&heap);
+    maze.start.gs = 0;
+    maze.start.fs = heuristic(&(maze.start), &(maze.goal));
+    heap_insert(&heap, &(maze.start));
 
     /* Loop and repeatedly extracts the node with the highest f-score to
        process on. */
-    while (heap->size > 0) {
+    while (heap.size > 0) {
         int direction;
-        node_t *cur = heap_extract(heap);
+        node_t *cur = heap_extract(&heap);
 
-        if (cur->mark == GOAL)  /* Goal point reached. */
+        if (cur == &(maze.goal))  /* Goal point reached. */
             break;
 
         cur->closed = true;
@@ -90,35 +91,38 @@ int main(int argc, char *argv[]) {
         /* Check all the neighbours. Since we are using a block maze, at most
            four neighbours on the four directions. */
         for (direction = 0; direction < 4; ++direction) {
-            node_t *n = fetch_neighbour(maze, cur, direction);
+            node_t *adjacent = fetch_neighbour(&maze, cur, direction);
 
-            if (n == NULL || n->mark == WALL || n->closed)
+            if (adjacent == NULL || adjacent == &(maze.wall) || adjacent->closed)
                 continue;   /* Not valid, or closed already. */
 
-            if (n->opened && cur->gs + 1 >= n->gs)
+            if (adjacent->opened && cur->gs + 1 >= adjacent->gs)
                 continue;   /* Old node met, not getting shorter. */
 
             /* Passing through CUR is the shortest way up to now. Update. */
-            n->parent = cur;
-            n->gs = cur->gs + 1;
-            n->fs = n->gs + heuristic(n, maze->goal);
-            if (!n->opened) {   /* New node discovered, add into heap. */
-                n->opened = true;
-                heap_insert(heap, n);
+            adjacent->parent = cur;
+            adjacent->gs = cur->gs + 1;
+            adjacent->fs = adjacent->gs + heuristic(adjacent, &(maze.goal));
+            if (!adjacent->opened) {   /* New node discovered, add into heap. */
+                adjacent->opened = true;
+                heap_insert(&heap, adjacent);
             } else              /* Updated old node. */
-                heap_update(heap, n);
+                heap_update(&heap, adjacent);
         }
     }
 
     /* Print the steps back. */
-    node = maze->goal->parent;
-    while (node != NULL && node->mark != START) {
-        maze_print_step(maze, node);
+    node = maze.goal.parent;
+    while (node != NULL && node != &(maze.goal)) {
+        *get_char_loc(&maze, node->x, node->y) = '*';
         node = node->parent;
+        count++;
     }
 
+    printf("%d\n", count);
+
     /* Free resources and return. */
-    heap_destroy(heap);
-    maze_destroy(maze);
+    heap_destroy(&heap);
+    maze_destroy(&maze);
     return 0;
 }
