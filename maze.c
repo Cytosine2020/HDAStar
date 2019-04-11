@@ -53,7 +53,7 @@ void maze_init(maze_t *maze, char *filename) {
     memset(maze->lines, 0, rows * sizeof(char *));
 
     file_ptr = maze->mem_map;
-    while(*(file_ptr++) != '\n');
+    while (*(file_ptr++) != '\n');
     maze->lines[0] = file_ptr;
 
     /* Allocate space for all nodes (cells) inside the maze. */
@@ -83,11 +83,11 @@ void maze_destroy(maze_t *maze) {
 /**
  * Initialize a cell in maze M at position (X, Y) to be a non-WALL.
  */
-node_t *maze_set_cell(maze_t *maze, int x, int y) {
-    node_t *node;
-    if (*get_char_loc(maze, x, y) == '#') node = &(maze->wall);
-    else node = node_init(alloc_node(), x, y);
-    return maze->nodes[y * maze->cols + x] = node;
+bool maze_set_cell(maze_t *maze, int x, int y) {
+    if (maze->nodes[y * maze->cols + x] != NULL) return true;
+    if (*get_char_loc(maze, x, y) == '#') maze->nodes[y * maze->cols + x] = &maze->wall;
+    else maze->nodes[y * maze->cols + x] = node_init(alloc_node(), x, y);
+    return false;
 }
 
 /**
@@ -95,9 +95,7 @@ node_t *maze_set_cell(maze_t *maze, int x, int y) {
  *   specified cell.
  */
 node_t *maze_get_cell(maze_t *maze, int x, int y) {
-    node_t *node = maze->nodes[y * maze->cols + x];
-    if (node == NULL) node = maze_set_cell(maze, x, y);
-    return node;
+    return maze->nodes[y * maze->cols + x];
 }
 
 /**
@@ -105,15 +103,15 @@ node_t *maze_get_cell(maze_t *maze, int x, int y) {
  *   indicating it is an intermediate step along the shortest path.
  */
 char *get_char_loc(maze_t *maze, int x, int y) {
-    char * line = maze->lines[y];
+    char *line = maze->lines[y];
     if (line == NULL) {
         int i;
         char *file_ptr;
         for (i = 0; maze->lines[i] == NULL; i++);
         file_ptr = maze->lines[i];
-        for(i++; i <= y; i++) {
+        for (i++; i <= y; i++) {
             file_ptr += maze->cols;
-            while(*(file_ptr++) != '\n');
+            while (*(file_ptr++) != '\n');
             maze->lines[i] = file_ptr;
         }
     }

@@ -36,7 +36,7 @@ void maze_init(maze_t *maze, char *filename);
 
 void maze_destroy(maze_t *maze);
 
-node_t *maze_set_cell(maze_t *maze, int x, int y);
+bool maze_set_cell(maze_t *maze, int x, int y);
 
 node_t *maze_get_cell(maze_t *maze, int x, int y);
 

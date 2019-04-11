@@ -17,10 +17,10 @@
 
 #define MEM_MAP_SIZE    (0x10000)
 
-static const size_t POOL_SIZE = MEM_MAP_SIZE / sizeof(node_t) - 1;
 static void *mem_pool = NULL;
 static void *last_pool = NULL;
-static size_t last_pool_length = 0;
+static void *last_pool_end = NULL;
+static node_t *last_pool_length = NULL;
 
 /**
  * Initialize a node whose position is recorded at (X, Y) with type MARK.
@@ -32,7 +32,6 @@ node_t *node_init(node_t *node, int x, int y) {
     node->gs = INT_MAX;
     node->fs = INT_MAX;
     node->heap_id = 0;
-    node->opened = false;
     node->closed = false;
     node->parent = NULL;
     return node;
@@ -51,17 +50,18 @@ void init_pool() {
             NULL,
             MEM_MAP_SIZE,
             PROT_READ | PROT_WRITE,
-            MAP_PRIVATE| MAP_ANONYMOUS,
+            MAP_PRIVATE | MAP_ANONYMOUS,
             -1, 0);
     assert(mem_pool != MAP_FAILED);
     last_pool = mem_pool;
-    last_pool_length = 1;
+    last_pool_length = (node_t *) last_pool + 1;
+    last_pool_end = (void *) ((size_t) last_pool + MEM_MAP_SIZE);
     *(void **) mem_pool = NULL;
 }
 
 
 node_t *alloc_node() {
-    if (last_pool_length >= POOL_SIZE) {
+    if (last_pool_length >= (node_t *) last_pool_end) {
         void *new_block = mmap(
                 last_pool,
                 MEM_MAP_SIZE,
@@ -71,17 +71,18 @@ node_t *alloc_node() {
         assert(new_block != MAP_FAILED);
         *(void **) last_pool = new_block;
         last_pool = new_block;
-        last_pool_length = 1;
+        last_pool_length = (node_t *) last_pool + 1;
+        last_pool_end = (void *) ((size_t) last_pool + MEM_MAP_SIZE);
         *(void **) new_block = NULL;
     }
 
-    return (node_t *) last_pool + last_pool_length++;
+    return last_pool_length++;
 }
 
 void release_pool() {
     void *this_pool = mem_pool;
-    while(this_pool != NULL) {
-        void *next_pool = *(void **)this_pool;
+    while (this_pool != NULL) {
+        void *next_pool = *(void **) this_pool;
         munmap(this_pool, MEM_MAP_SIZE);
         this_pool = next_pool;
     }

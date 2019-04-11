@@ -40,25 +40,6 @@
 #include "compass.h"    /* The heuristic. */
 
 /**
- * Fetch the neighbour located at direction DIRECTION of node N, in the
- *   maze M. Returns pointer to the neighbour node.
- */
-static node_t *fetch_neighbour(maze_t *maze, node_t *node, int direction) {
-    switch (direction) {
-        case 0:
-            return maze_get_cell(maze, node->x, node->y - 1);
-        case 1:
-            return maze_get_cell(maze, node->x + 1, node->y);
-        case 2:
-            return maze_get_cell(maze, node->x, node->y + 1);
-        case 3:
-            return maze_get_cell(maze, node->x - 1, node->y);
-        default:
-            return NULL;
-    }
-}
-
-/**
  * Entrance point. Time ticking will be performed on the whole procedure,
  *   including I/O. Parallel and optimize as much as you can.
  */
@@ -67,6 +48,8 @@ int main(int argc, char *argv[]) {
     heap_t heap;
     node_t *node;
     int count = 0;
+    int direction_x[4] = {0, 0, 0, 0};
+    int direction_y[4] = {0, 0, 0, 0};
 
     assert(argc == 2);  /* Must have given the source file name. */
 
@@ -77,44 +60,55 @@ int main(int argc, char *argv[]) {
     maze.start.gs = 0;
     maze.start.fs = heuristic(&(maze.start), &(maze.goal));
     maze.start.closed = true;
+    maze_set_cell(&maze, maze.start.x + 1, maze.start.y);
     node = maze_get_cell(&maze, maze.start.x + 1, maze.start.y);
     node->parent = &(maze.start);
     node->gs = 1;
     node->fs = 1 + heuristic(node, &(maze.goal));
-    node->opened = true;
     heap_insert(&heap, node);
 
     /* Loop and repeatedly extracts the node with the highest f-score to
        process on. */
     while (heap.size > 0) {
-        int direction;
         node_t *cur = heap_extract(&heap);
+        int i;
 
         if (cur == &(maze.goal))  /* Goal point reached. */
             break;
 
         cur->closed = true;
 
+        direction_x[0] = cur->x + 1;
+        direction_y[0] = cur->y;
+        direction_x[1] = cur->x - 1;
+        direction_y[1] = cur->y;
+        direction_x[2] = cur->x;
+        direction_y[2] = cur->y + 1;
+        direction_x[3] = cur->x;
+        direction_y[3] = cur->y - 1;
+
         /* Check all the neighbours. Since we are using a block maze, at most
            four neighbours on the four directions. */
-        for (direction = 0; direction < 4; ++direction) {
-            node_t *adjacent = fetch_neighbour(&maze, cur, direction);
+        for (i = 0; i < 4; ++i) {
+            bool opened = maze_set_cell(&maze, direction_x[i], direction_y[i]);
+            node_t *adjacent = maze_get_cell(&maze, direction_x[i], direction_y[i]);
 
             if (adjacent == &(maze.wall) || adjacent->closed)
                 continue;   /* Not valid, or closed already. */
 
-            if (adjacent->opened && cur->gs + 1 >= adjacent->gs)
-                continue;   /* Old node met, not getting shorter. */
-
-            /* Passing through CUR is the shortest way up to now. Update. */
-            adjacent->parent = cur;
-            adjacent->gs = cur->gs + 1;
-            adjacent->fs = adjacent->gs + heuristic(adjacent, &(maze.goal));
-            if (!adjacent->opened) {   /* New node discovered, add into heap. */
-                adjacent->opened = true;
+            if (opened) {
+                if (cur->gs + 1 < adjacent->gs) {
+                    adjacent->parent = cur;
+                    adjacent->gs = cur->gs + 1;
+                    adjacent->fs = adjacent->gs + heuristic(adjacent, &(maze.goal));
+                    heap_update(&heap, adjacent);
+                }
+            } else {
+                adjacent->parent = cur;
+                adjacent->gs = cur->gs + 1;
+                adjacent->fs = adjacent->gs + heuristic(adjacent, &(maze.goal));
                 heap_insert(&heap, adjacent);
-            } else              /* Updated old node. */
-                heap_update(&heap, adjacent);
+            }
         }
     }
 

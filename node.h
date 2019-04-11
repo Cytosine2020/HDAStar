@@ -29,7 +29,6 @@ typedef struct node_t {
     int gs;         /* A* g-score. */
     int fs;         /* A* f-score. */
     int heap_id;    /* Position on min heap, used by updating. */
-    bool opened;    /* Has been discovered? */
     bool closed;    /* Has been closed? */
     struct node_t *parent;  /* Parent node along the path. */
 } node_t;
