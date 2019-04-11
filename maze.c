@@ -44,7 +44,6 @@ void maze_init(maze_t *maze, char *filename) {
 
     /* at maze_print_step.*/
     assert(sscanf((char *) maze->mem_map, "%d %d\n", &rows, &cols) == 2);
-    maze->rows = rows;
     maze->cols = cols;
 
     /* initial lines. */
@@ -78,24 +77,6 @@ void maze_destroy(maze_t *maze) {
     msync(maze->mem_map, maze->mem_size, MS_ASYNC | MS_INVALIDATE);
     munmap(maze->mem_map, maze->mem_size);
     close(maze->fd);
-}
-
-/**
- * Initialize a cell in maze M at position (X, Y) to be a non-WALL.
- */
-bool maze_set_cell(maze_t *maze, int x, int y) {
-    if (maze->nodes[y * maze->cols + x] != NULL) return true;
-    if (*get_char_loc(maze, x, y) == '#') maze->nodes[y * maze->cols + x] = &maze->wall;
-    else maze->nodes[y * maze->cols + x] = node_init(alloc_node(), x, y);
-    return false;
-}
-
-/**
- * Get the cell in maze M at position (X, Y). Returns the pointer to the
- *   specified cell.
- */
-node_t *maze_get_cell(maze_t *maze, int x, int y) {
-    return maze->nodes[y * maze->cols + x];
 }
 
 /**

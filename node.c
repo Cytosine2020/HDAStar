@@ -37,14 +37,6 @@ node_t *node_init(node_t *node, int x, int y) {
     return node;
 }
 
-/**
- * Defines the comparison method between nodes, that is, comparing their
- *   A* f-scores.
- */
-bool node_less(node_t *n1, node_t *n2) {
-    return n1->fs < n2->fs;
-}
-
 void init_pool() {
     mem_pool = mmap(
             NULL,
@@ -58,7 +50,6 @@ void init_pool() {
     last_pool_end = (void *) ((size_t) last_pool + MEM_MAP_SIZE);
     *(void **) mem_pool = NULL;
 }
-
 
 node_t *alloc_node() {
     if (last_pool_length >= (node_t *) last_pool_end) {

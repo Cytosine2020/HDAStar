@@ -19,13 +19,12 @@
  * Structure of a minecraft-style block maze.
  */
 typedef struct maze_t {
-    int rows;           /* Number of rows. */
     int cols;           /* Number of cols. */
+    int fd;
     node_t **nodes;     /* Array of node pointers. */
     node_t start;      /* Start node pointer. */
     node_t goal;       /* Goal node pointer. */
     node_t wall;
-    int fd;
     void *mem_map;
     size_t mem_size;
     char **lines;
@@ -35,10 +34,6 @@ typedef struct maze_t {
 void maze_init(maze_t *maze, char *filename);
 
 void maze_destroy(maze_t *maze);
-
-bool maze_set_cell(maze_t *maze, int x, int y);
-
-node_t *maze_get_cell(maze_t *maze, int x, int y);
 
 char *get_char_loc(maze_t *maze, int x, int y);
 

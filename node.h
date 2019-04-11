@@ -16,9 +16,10 @@
  *   it is stupid for not even defining a standard "bool" type in ANSI C
  *   standard.
  */
-typedef int bool;
 #define true  (1)
 #define false (0)
+typedef int bool;
+
 
 /**
  * Structure of a block cell node.
@@ -36,7 +37,7 @@ typedef struct node_t {
 /* Function prototypes. */
 node_t *node_init(node_t *node, int x, int y);
 
-bool node_less(node_t *n1, node_t *n2);
+#define node_less(n1, n2)   ((n1)->fs < (n2)->fs)
 
 void init_pool();
 

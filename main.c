@@ -60,11 +60,12 @@ int main(int argc, char *argv[]) {
     maze.start.gs = 0;
     maze.start.fs = heuristic(&(maze.start), &(maze.goal));
     maze.start.closed = true;
-    maze_set_cell(&maze, maze.start.x + 1, maze.start.y);
-    node = maze_get_cell(&maze, maze.start.x + 1, maze.start.y);
+
+    node = node_init(alloc_node(), 1, 1);
     node->parent = &(maze.start);
     node->gs = 1;
     node->fs = 1 + heuristic(node, &(maze.goal));
+    maze.nodes[maze.cols + 1] = node;
     heap_insert(&heap, node);
 
     /* Loop and repeatedly extracts the node with the highest f-score to
@@ -90,8 +91,16 @@ int main(int argc, char *argv[]) {
         /* Check all the neighbours. Since we are using a block maze, at most
            four neighbours on the four directions. */
         for (i = 0; i < 4; ++i) {
-            bool opened = maze_set_cell(&maze, direction_x[i], direction_y[i]);
-            node_t *adjacent = maze_get_cell(&maze, direction_x[i], direction_y[i]);
+            node_t **adj_ptr = &(maze.nodes[direction_y[i] * maze.cols + direction_x[i]]);
+            node_t *adjacent = *adj_ptr;
+            bool opened = adjacent != NULL;
+            if (!opened) {
+                if (*get_char_loc(&maze, direction_x[i], direction_y[i]) == '#')
+                    adjacent = &(maze.wall);
+                else
+                    adjacent = node_init(alloc_node(), direction_x[i], direction_y[i]);
+                *adj_ptr = adjacent;
+            }
 
             if (adjacent == &(maze.wall) || adjacent->closed)
                 continue;   /* Not valid, or closed already. */
