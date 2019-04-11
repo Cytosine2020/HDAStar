@@ -34,7 +34,13 @@ void maze_init(maze_t *maze, char *filename) {
     assert(maze->fd != -1);
     assert(fstat(maze->fd, &status) != -1);
     maze->mem_size = (size_t) status.st_size;
-    maze->mem_map = mmap(NULL, (size_t) status.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, maze->fd, 0);
+    maze->mem_map = mmap(
+            NULL,
+            (size_t) status.st_size,
+            PROT_READ | PROT_WRITE,
+            MAP_SHARED | MAP_FILE,
+            maze->fd, 0);
+    assert(maze->mem_map != MAP_FAILED);
 
     /* at maze_print_step.*/
     assert(sscanf((char *) maze->mem_map, "%d %d\n", &rows, &cols) == 2);
@@ -55,19 +61,21 @@ void maze_init(maze_t *maze, char *filename) {
     maze->nodes = malloc(size);
     memset(maze->nodes, 0, size);
 
-    node_init(&maze->start, 1, 0);
-    node_init(&maze->goal, rows - 2, cols - 1);
+    node_init(&maze->start, 0, 1);
+    node_init(&maze->goal, cols - 1, rows - 2);
     node_init(&maze->wall, -1, -1);
+
+    maze->nodes[cols] = &maze->start;
+    maze->nodes[(rows - 1) * cols - 1] = &maze->goal;
 }
 
 /**
  * Delete the memory occupied by the maze M.
  */
 void maze_destroy(maze_t *maze) {
-    release_pool();
     free(maze->nodes);
     free(maze->lines);
-    msync(maze->mem_map, maze->mem_size, MS_ASYNC);
+    msync(maze->mem_map, maze->mem_size, MS_ASYNC | MS_INVALIDATE);
     munmap(maze->mem_map, maze->mem_size);
     close(maze->fd);
 }
@@ -79,7 +87,7 @@ node_t *maze_set_cell(maze_t *maze, int x, int y) {
     node_t *node;
     if (*get_char_loc(maze, x, y) == '#') node = &(maze->wall);
     else node = node_init(alloc_node(), x, y);
-    return maze->nodes[x * maze->cols + y] = node;
+    return maze->nodes[y * maze->cols + x] = node;
 }
 
 /**
@@ -87,7 +95,7 @@ node_t *maze_set_cell(maze_t *maze, int x, int y) {
  *   specified cell.
  */
 node_t *maze_get_cell(maze_t *maze, int x, int y) {
-    node_t *node = maze->nodes[x * maze->cols + y];
+    node_t *node = maze->nodes[y * maze->cols + x];
     if (node == NULL) node = maze_set_cell(maze, x, y);
     return node;
 }
@@ -97,17 +105,17 @@ node_t *maze_get_cell(maze_t *maze, int x, int y) {
  *   indicating it is an intermediate step along the shortest path.
  */
 char *get_char_loc(maze_t *maze, int x, int y) {
-    char * line = maze->lines[x];
+    char * line = maze->lines[y];
     if (line == NULL) {
         int i;
         char *file_ptr;
         for (i = 0; maze->lines[i] == NULL; i++);
-        file_ptr = maze->lines[i - 1];
-        for(; i <= x; i++) {
+        file_ptr = maze->lines[i];
+        for(i++; i <= y; i++) {
             file_ptr += maze->cols;
             while(*(file_ptr++) != '\n');
             maze->lines[i] = file_ptr;
         }
     }
-    return line + y;
+    return maze->lines[y] + x;
 }

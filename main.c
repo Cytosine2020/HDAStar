@@ -71,11 +71,18 @@ int main(int argc, char *argv[]) {
     assert(argc == 2);  /* Must have given the source file name. */
 
     /* Initializations. */
+    init_pool();
     maze_init(&maze, argv[1]);
     heap_init(&heap);
     maze.start.gs = 0;
     maze.start.fs = heuristic(&(maze.start), &(maze.goal));
-    heap_insert(&heap, &(maze.start));
+    maze.start.closed = true;
+    node = maze_get_cell(&maze, maze.start.x + 1, maze.start.y);
+    node->parent = &(maze.start);
+    node->gs = 1;
+    node->fs = 1 + heuristic(node, &(maze.goal));
+    node->opened = true;
+    heap_insert(&heap, node);
 
     /* Loop and repeatedly extracts the node with the highest f-score to
        process on. */
@@ -93,7 +100,7 @@ int main(int argc, char *argv[]) {
         for (direction = 0; direction < 4; ++direction) {
             node_t *adjacent = fetch_neighbour(&maze, cur, direction);
 
-            if (adjacent == NULL || adjacent == &(maze.wall) || adjacent->closed)
+            if (adjacent == &(maze.wall) || adjacent->closed)
                 continue;   /* Not valid, or closed already. */
 
             if (adjacent->opened && cur->gs + 1 >= adjacent->gs)
@@ -113,7 +120,7 @@ int main(int argc, char *argv[]) {
 
     /* Print the steps back. */
     node = maze.goal.parent;
-    while (node != NULL && node != &(maze.goal)) {
+    while (node != &(maze.start)) {
         *get_char_loc(&maze, node->x, node->y) = '*';
         node = node->parent;
         count++;
@@ -124,5 +131,6 @@ int main(int argc, char *argv[]) {
     /* Free resources and return. */
     heap_destroy(&heap);
     maze_destroy(&maze);
+    release_pool();
     return 0;
 }

@@ -39,6 +39,8 @@ node_t *node_init(node_t *node, int x, int y);
 
 bool node_less(node_t *n1, node_t *n2);
 
+void init_pool();
+
 node_t *alloc_node();
 
 void release_pool();
