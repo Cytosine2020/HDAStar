@@ -25,6 +25,7 @@ node_t *node_init(node_t *node, int x, int y) {
     node->gs = INT_MAX;
     node->fs = INT_MAX;
     node->heap_id = 0;
+    node->closed = false;
     return node;
 }
 

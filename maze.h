@@ -17,11 +17,8 @@
 
 #define maze_node(maze, x, y)       ((maze)->nodes[(y) * (maze)->cols + (x)])
 #define maze_lines(file, x, y)      ((file)->lines[y][x])
-#define get_closed(maze)             (&((maze)->closed))
 #define get_goal(maze)              (&((maze)->goal))
 #define get_wall(maze)              (&((maze)->wall))
-#define is_closed(maze, ptr)         ((ptr) == &((maze)->closed))
-#define is_goal(maze, ptr)          ((ptr) == &((maze)->goal))
 #define is_wall(maze, ptr)          ((ptr) == &((maze)->wall))
 
 
@@ -39,14 +36,13 @@ typedef struct maze_file_t {
  */
 typedef struct maze_t {
     node_t **nodes;         /* Array of node. */
-    node_t closed;            /* Goal node. */
     node_t goal;            /* Goal node. */
     node_t wall;            /* Wall node. */
     int cols;               /* Number of cols. */
 } maze_t;
 
 /* Function prototypes. */
-maze_t *maze_init(int rows, int cols);
+maze_t *maze_init(int cols, int rows, int goal_x, int goal_y);
 
 void maze_destroy(maze_t *maze);
 

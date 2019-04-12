@@ -1,10 +1,10 @@
 /**
  * File: maze.c
- * 
+ *
  *   Implementation of library functions manipulating a minecraft-style block
  *     maze. Feel free to add, remove, or modify these library functions to
  *     serve your algorithm.
- *  
+ *
  * Jose @ ShanghaiTech University
  */
 
@@ -23,7 +23,7 @@
  * Initialize a maze from a formatted source file named FILENAME. Returns the
  *   pointer to the new maze.
  */
-maze_t *maze_init(int rows, int cols) {
+maze_t *maze_init(int cols, int rows, int goal_x, int goal_y) {
     maze_t *maze = malloc(sizeof(maze_t));
     size_t size;
     /* Allocate space for all nodes (cells) inside the maze. */
@@ -31,14 +31,12 @@ maze_t *maze_init(int rows, int cols) {
     size = rows * cols * sizeof(node_t *);
     maze->nodes = malloc(size);
     memset(maze->nodes, 0, size);
-
-    node_init(&maze->goal, cols - 1, rows - 2);
+    /* initial special nodes. */
+    node_init(&maze->goal, goal_x, goal_y);
     node_init(&maze->wall, -1, -1);
-    node_init(&maze->closed, -1, -1);
-
+    /* set start and goal as wall */
     maze->nodes[cols] = get_wall(maze);
-    maze->nodes[(rows - 1) * cols - 1] = get_goal(maze);
-
+    maze->nodes[(rows - 1) * cols - 1] = get_wall(maze);
     return maze;
 }
 

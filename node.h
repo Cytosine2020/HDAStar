@@ -14,16 +14,21 @@
 #define node_less(n1, n2)   ((n1)->fs < (n2)->fs)
 #define MEM_MAP_SIZE        (0x10000)
 
+#define true  (1)
+#define false (0)
+typedef int bool;
+
 /**
  * Structure of a block cell node.
  */
 typedef struct node_t {
     struct node_t *parent;      /* Parent node along the path. */
     int x;                      /* X coordinate, starting from 0. */
-int y;                          /* Y coordinate, starting from 0. */
+    int y;                      /* Y coordinate, starting from 0. */
     int gs;                     /* A* g-score. */
     int fs;                     /* A* f-score. */
     int heap_id;                /* Position on min heap, used by updating. */
+    bool closed;
 } node_t;
 
 typedef struct mem_pool_t {
