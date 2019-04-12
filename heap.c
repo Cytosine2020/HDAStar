@@ -17,11 +17,13 @@
  * Initialize a min heap. The heap is constructed using array-based
  *   implementation. Returns the pointer to the new heap.
  */
-void heap_init(heap_t *heap) {
+heap_t *heap_init() {
+    heap_t *heap = malloc(sizeof(heap_t));
     heap->size = 1;
     heap->capacity = INIT_CAPACITY;    /* Initial capacity = 1000. */
     heap->nodes = malloc(INIT_CAPACITY * sizeof(node_t *));
     /*memset(heap->nodes, 0, INIT_CAPACITY * sizeof(node_t *));*/
+    return heap;
 }
 
 /**
@@ -29,6 +31,7 @@ void heap_init(heap_t *heap) {
  */
 void heap_destroy(heap_t *heap) {
     free(heap->nodes);
+    free(heap);
 }
 
 /**
@@ -90,5 +93,3 @@ void heap_update(heap_t *heap, node_t *node) {
     heap->nodes[cur] = node;
     node->heap_id = cur;
 }
-
-

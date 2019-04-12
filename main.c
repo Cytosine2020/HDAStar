@@ -44,96 +44,98 @@
  *   including I/O. Parallel and optimize as much as you can.
  */
 int main(int argc, char *argv[]) {
-    maze_t maze;
-    heap_t heap;
-    node_t *node;
-    int count = 0;
-    int direction_x[4] = {0, 0, 0, 0};
-    int direction_y[4] = {0, 0, 0, 0};
+    maze_file_t *file = NULL;
+    mem_pool_t *mem_pool = NULL;
+    maze_t *maze = NULL;
+    heap_t *heap = NULL;
+    node_t *node = NULL;
+    int x_axis[4] = {0, 0, 0, 0};
+    int y_axis[4] = {0, 0, 0, 0};
+    int count = 0, i = 0;
 
     assert(argc == 2);  /* Must have given the source file name. */
 
     /* Initializations. */
-    init_pool();
-    maze_init(&maze, argv[1]);
-    heap_init(&heap);
-    maze.start.gs = 0;
-    maze.start.fs = heuristic(&(maze.start), &(maze.goal));
-    maze.start.closed = true;
-
-    node = node_init(alloc_node(), 1, 1);
-    node->parent = &(maze.start);
+    file = maze_file_init(argv[1]);
+    mem_pool = init_pool();
+    maze = maze_init(file->rows, file->cols);
+    heap = heap_init();
+    /* initialize first node. */
+    node = node_init(alloc_node(mem_pool), 1, 1);
+    node->parent = NULL;
     node->gs = 1;
-    node->fs = 1 + heuristic(node, &(maze.goal));
-    maze.nodes[maze.cols + 1] = node;
-    heap_insert(&heap, node);
+    node->fs = 1 + heuristic(node, get_goal(maze));
+    /* modify maze.nodes. */
+    maze_node(maze, 1, 1) = node;
+    /* update node. */
+    heap_insert(heap, node);
 
     /* Loop and repeatedly extracts the node with the highest f-score to
        process on. */
-    while (heap.size > 0) {
-        node_t *cur = heap_extract(&heap);
-        int i;
-
-        if (cur == &(maze.goal))  /* Goal point reached. */
-            break;
-
-        cur->closed = true;
-
-        direction_x[0] = cur->x + 1;
-        direction_y[0] = cur->y;
-        direction_x[1] = cur->x - 1;
-        direction_y[1] = cur->y;
-        direction_x[2] = cur->x;
-        direction_y[2] = cur->y + 1;
-        direction_x[3] = cur->x;
-        direction_y[3] = cur->y - 1;
-
-        /* Check all the neighbours. Since we are using a block maze, at most
-           four neighbours on the four directions. */
+    while (heap->size > 1) {
+        node = heap_extract(heap);
+        /* Goal point reached. */
+        if (is_goal(maze, node)) break;
+        /* close node, */
+        maze_node(maze, node->x, node->y) = get_closed(maze);
+        /* initial four direction. */
+        x_axis[0] = node->x + 1;
+        y_axis[0] = node->y;
+        x_axis[1] = node->x - 1;
+        y_axis[1] = node->y;
+        x_axis[2] = node->x;
+        y_axis[2] = node->y + 1;
+        x_axis[3] = node->x;
+        y_axis[3] = node->y - 1;
+        /* Check all the neighbours. */
         for (i = 0; i < 4; ++i) {
-            node_t **adj_ptr = &(maze.nodes[direction_y[i] * maze.cols + direction_x[i]]);
-            node_t *adjacent = *adj_ptr;
-            bool opened = adjacent != NULL;
-            if (!opened) {
-                if (*get_char_loc(&maze, direction_x[i], direction_y[i]) == '#')
-                    adjacent = &(maze.wall);
-                else
-                    adjacent = node_init(alloc_node(), direction_x[i], direction_y[i]);
-                *adj_ptr = adjacent;
-            }
+            node_t **adj_ptr = &maze_node(maze, x_axis[i], y_axis[i]);
+            node_t *adj = *adj_ptr;
 
-            if (adjacent == &(maze.wall) || adjacent->closed)
-                continue;   /* Not valid, or closed already. */
-
-            if (opened) {
-                if (cur->gs + 1 < adjacent->gs) {
-                    adjacent->parent = cur;
-                    adjacent->gs = cur->gs + 1;
-                    adjacent->fs = adjacent->gs + heuristic(adjacent, &(maze.goal));
-                    heap_update(&heap, adjacent);
+            if (is_closed(maze, adj)) continue;
+            /* if NULL, the node is not opened */
+            if (adj == NULL) {
+                /* read file and judge whether it is wall. */
+                if (maze_lines(file, x_axis[i], y_axis[i]) == '#') {
+                    /* modify maze.nodes. */
+                    *adj_ptr = get_wall(maze);
+                } else {
+                    /* allocate new node and modify maze.nodes. */
+                    adj = node_init(alloc_node(mem_pool), x_axis[i], y_axis[i]);
+                    *adj_ptr = adj;
+                    /* initialize node. */
+                    adj->parent = node;
+                    adj->gs = node->gs + 1;
+                    adj->fs = adj->gs + heuristic(adj, get_goal(maze));
+                    /* update node. */
+                    heap_insert(heap, adj);
                 }
             } else {
-                adjacent->parent = cur;
-                adjacent->gs = cur->gs + 1;
-                adjacent->fs = adjacent->gs + heuristic(adjacent, &(maze.goal));
-                heap_insert(&heap, adjacent);
+                /* update if not wall, not closed and can improve. */
+                if (!is_wall(maze, adj) && node->gs + 1 < adj->gs) {
+                    /* initialize node. */
+                    adj->parent = node;
+                    adj->gs = node->gs + 1;
+                    adj->fs = adj->gs + heuristic(adj, get_goal(maze));
+                    /* update node. */
+                    heap_update(heap, adj);
+                }
             }
         }
     }
 
     /* Print the steps back. */
-    node = maze.goal.parent;
-    while (node != &(maze.start)) {
-        *get_char_loc(&maze, node->x, node->y) = '*';
+    node = get_goal(maze)->parent;
+    while (node != NULL) {
+        maze_lines(file, node->x, node->y) = '*';
         node = node->parent;
         count++;
     }
-
     printf("%d\n", count);
-
     /* Free resources and return. */
-    heap_destroy(&heap);
-    maze_destroy(&maze);
-    release_pool();
+    heap_destroy(heap);
+    maze_destroy(maze);
+    release_pool(mem_pool);
+    maze_file_destroy(file);
     return 0;
 }

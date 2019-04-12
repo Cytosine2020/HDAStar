@@ -13,8 +13,8 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <memory.h>
 #include <zconf.h>
+#include <memory.h>
 
 #include "maze.h"
 #include "node.h"
@@ -23,49 +23,23 @@
  * Initialize a maze from a formatted source file named FILENAME. Returns the
  *   pointer to the new maze.
  */
-void maze_init(maze_t *maze, char *filename) {
-    int rows, cols;
+maze_t *maze_init(int rows, int cols) {
+    maze_t *maze = malloc(sizeof(maze_t));
     size_t size;
-    char *file_ptr;
-    struct stat status;
-
-    /* Open the source file and read in number of rows & cols. */
-    maze->fd = open(filename, O_RDWR);
-    assert(maze->fd != -1);
-    assert(fstat(maze->fd, &status) != -1);
-    maze->mem_size = (size_t) status.st_size;
-    maze->mem_map = mmap(
-            NULL,
-            (size_t) status.st_size,
-            PROT_READ | PROT_WRITE,
-            MAP_SHARED | MAP_FILE,
-            maze->fd, 0);
-    assert(maze->mem_map != MAP_FAILED);
-
-    /* at maze_print_step.*/
-    assert(sscanf((char *) maze->mem_map, "%d %d\n", &rows, &cols) == 2);
-    maze->cols = cols;
-
-    /* initial lines. */
-    maze->lines = malloc(rows * sizeof(char *));
-    assert(maze->lines != NULL);
-    memset(maze->lines, 0, rows * sizeof(char *));
-
-    file_ptr = maze->mem_map;
-    while (*(file_ptr++) != '\n');
-    maze->lines[0] = file_ptr;
-
     /* Allocate space for all nodes (cells) inside the maze. */
+    maze->cols = cols;
     size = rows * cols * sizeof(node_t *);
     maze->nodes = malloc(size);
     memset(maze->nodes, 0, size);
 
-    node_init(&maze->start, 0, 1);
     node_init(&maze->goal, cols - 1, rows - 2);
     node_init(&maze->wall, -1, -1);
+    node_init(&maze->closed, -1, -1);
 
-    maze->nodes[cols] = &maze->start;
-    maze->nodes[(rows - 1) * cols - 1] = &maze->goal;
+    maze->nodes[cols] = get_wall(maze);
+    maze->nodes[(rows - 1) * cols - 1] = get_goal(maze);
+
+    return maze;
 }
 
 /**
@@ -73,28 +47,51 @@ void maze_init(maze_t *maze, char *filename) {
  */
 void maze_destroy(maze_t *maze) {
     free(maze->nodes);
-    free(maze->lines);
-    msync(maze->mem_map, maze->mem_size, MS_ASYNC | MS_INVALIDATE);
-    munmap(maze->mem_map, maze->mem_size);
-    close(maze->fd);
+    free(maze);
 }
 
-/**
- * Sets the position of node N in maze M in the source file to be "*",
- *   indicating it is an intermediate step along the shortest path.
- */
-char *get_char_loc(maze_t *maze, int x, int y) {
-    char *line = maze->lines[y];
-    if (line == NULL) {
-        int i;
-        char *file_ptr;
-        for (i = 0; maze->lines[i] == NULL; i++);
-        file_ptr = maze->lines[i];
-        for (i++; i <= y; i++) {
-            file_ptr += maze->cols;
-            while (*(file_ptr++) != '\n');
-            maze->lines[i] = file_ptr;
-        }
+maze_file_t *maze_file_init(char *filename) {
+    maze_file_t *file = malloc(sizeof(maze_file_t));
+    char *file_ptr;
+    struct stat status;
+    int rows, cols;
+    int i;
+    /* Open the source file and read in number of rows & cols. */
+    file->fd = open(filename, O_RDWR);
+    assert(file->fd != -1);
+    assert(fstat(file->fd, &status) != -1);
+    file->mem_size = (size_t) status.st_size;
+    file->mem_map = mmap(
+            NULL,
+            (size_t) status.st_size,
+            PROT_READ | PROT_WRITE,
+            MAP_SHARED | MAP_FILE,
+            file->fd, 0);
+    assert(file->mem_map != MAP_FAILED);
+
+    /* at maze_print_step.*/
+    assert(sscanf((char *) file->mem_map, "%d %d\n", &rows, &cols) == 2);
+    file->cols = cols;
+    file->rows = rows;
+
+    /* initial lines. */
+    file->lines = malloc(rows * sizeof(char *));
+    assert(file->lines != NULL);
+    memset(file->lines, 0, rows * sizeof(char *));
+
+    file_ptr = file->mem_map;
+    for (i = 0; i < rows; i++) {
+        while (*(file_ptr++) != '\n');
+        file->lines[i] = file_ptr;
+        file_ptr += file->cols;
     }
-    return maze->lines[y] + x;
+    return file;
+}
+
+void maze_file_destroy(maze_file_t *file) {
+    free(file->lines);
+    msync(file->mem_map, file->mem_size, MS_ASYNC | MS_INVALIDATE);
+    munmap(file->mem_map, file->mem_size);
+    close(file->fd);
+    free(file);
 }
