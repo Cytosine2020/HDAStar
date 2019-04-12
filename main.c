@@ -36,6 +36,7 @@
 #include <assert.h>     /* assert */
 #include <pthread.h>
 #include <bits/sigthread.h>
+#include <zconf.h>
 
 #include "heap.h"
 #include "node.h"
@@ -46,12 +47,15 @@
 typedef struct a_star_return_t {
     int x;
     int y;
+    int min_len;
+    int upper_bound;
     pthread_t self;
 } a_star_return_t;
 
 typedef struct a_star_argument_t {
     const maze_file_t *file;
     const maze_t *other_maze;
+    const heap_t *other_heap;
     mem_pool_t *mem_pool;
     maze_t *maze;
     heap_t *heap;
@@ -70,11 +74,6 @@ void *a_star_search(void *arguments) {
     /* Loop and repeatedly extracts the node with the highest f-score to process on. */
     while (data.heap->size > 1) {
         node = heap_extract(data.heap);
-        /* close node, */
-        offset = node->y * data.maze->cols + node->x;
-        data.maze->nodes[offset]->closed = true;
-        other_node = data.other_maze->nodes[offset];
-        if (other_node != NULL && other_node->closed) break;
         /* initial four direction. */
         x_axis[0] = node->x + 1;
         y_axis[0] = node->y;
@@ -117,17 +116,41 @@ void *a_star_search(void *arguments) {
                 }
             }
         }
+        /* close node, */
+        offset = node->y * data.maze->cols + node->x;
+        data.maze->nodes[offset]->closed = true;
+        other_node = data.other_maze->nodes[offset];
+        if (other_node != NULL && !is_wall(data.other_maze, other_node)) {
+            int last_len, len = node->gs + other_node->gs;
+            int this_heap_least, other_heap_least, max_bound, last_bound;
+            if (data.heap->size > 1) this_heap_least = data.heap->nodes[1]->fs;
+            else this_heap_least = INT_MAX;
+            if (data.other_heap->size > 1) other_heap_least = data.other_heap->nodes[1]->fs;
+            else other_heap_least = INT_MAX;
+            max_bound = this_heap_least > other_heap_least ? this_heap_least : other_heap_least;
+            assert(!pthread_mutex_lock(data.finished_mutex));
+            last_len = data.return_value->min_len;
+            if (len < last_len) {
+                data.return_value->min_len = len;
+                data.return_value->x = node->x;
+                data.return_value->y = node->y;
+            }
+            last_bound = data.return_value->upper_bound;
+            if (max_bound < last_bound) data.return_value->upper_bound = max_bound;
+            if (data.return_value->upper_bound > data.return_value->min_len) {
+                assert(!pthread_mutex_unlock(data.finished_mutex));
+                break;
+            }
+            assert(!pthread_mutex_unlock(data.finished_mutex));
+        }
     }
     /* return to main thread. */
     assert(!pthread_mutex_lock(data.finished_mutex));
-    data.return_value->x = node->x;
-    data.return_value->y = node->y;
     data.return_value->self = pthread_self();
     assert(!pthread_cond_signal(data.finished));
     assert(!pthread_mutex_unlock(data.finished_mutex));
     return NULL;
 }
-
 
 /**
  * Entrance point. Time ticking will be performed on the whole procedure,
@@ -140,7 +163,7 @@ int main(int argc, char *argv[]) {
     a_star_argument_t argument_start, argument_goal;
     pthread_t from_start, from_goal;
     node_t *node = NULL;
-    a_star_return_t return_value = {-1, -1, -1};
+    a_star_return_t return_value = {-1, -1, INT_MAX, -1, -1};
     int count = 1;
 
     assert(argc == 2);  /* Must have given the source file name. */
@@ -179,12 +202,15 @@ int main(int argc, char *argv[]) {
     argument_goal.file = file;
     argument_start.other_maze = argument_goal.maze;
     argument_goal.other_maze = argument_start.maze;
+    argument_start.other_heap = argument_goal.heap;
+    argument_goal.other_heap = argument_start.heap;
     argument_start.finished = &finished;
     argument_goal.finished = &finished;
     argument_start.finished_mutex = &finished_mutex;
     argument_goal.finished_mutex = &finished_mutex;
     argument_start.return_value = &return_value;
     argument_goal.return_value = &return_value;
+
 
     assert(!pthread_mutex_lock(&finished_mutex));
     /* create two threads. */
