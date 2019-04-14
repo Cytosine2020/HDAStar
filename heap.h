@@ -13,8 +13,8 @@
 
 #include "node.h"
 
-/* Define initial capacity to be 1000. */
-#define INIT_CAPACITY 1000
+/* Define initial capacity to be 1024. */
+#define INIT_CAPACITY 1024
 
 
 /**
@@ -24,10 +24,11 @@ typedef struct heap_t {
     node_t **nodes;     /* Array of node pointers. */
     int size;           /* Current size. */
     int capacity;       /* Temporary capacity. */
+    int minimal;
 } heap_t;
 
 /* Function prototypes. */
-heap_t *heap_init();
+heap_t *heap_init(node_t *node);
 
 void heap_destroy(heap_t *heap);
 

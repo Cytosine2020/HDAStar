@@ -48,8 +48,6 @@ typedef struct a_star_return_t {
     int x;
     int y;
     int min_len;
-    int upper_bound;
-    pthread_t self;
 } a_star_return_t;
 
 typedef struct a_star_argument_t {
@@ -59,8 +57,9 @@ typedef struct a_star_argument_t {
     mem_pool_t *mem_pool;
     maze_t *maze;
     heap_t *heap;
-    pthread_cond_t *finished;
     pthread_mutex_t *finished_mutex;
+    pthread_t other_thread;
+    pthread_mutex_t *return_value_mutex;
     a_star_return_t *return_value;
 } a_star_argument_t;
 
@@ -69,11 +68,31 @@ void *a_star_search(void *arguments) {
     int y_axis[4] = {0, 0, 0, 0};
     a_star_argument_t data = *(a_star_argument_t *) arguments;
     node_t *node = NULL, *other_node = NULL;
-    int i = 0, offset = 0;
+    int i = 0;
+    int this_heap_least, other_heap_least, max_bound;
     assert(!pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL));
     /* Loop and repeatedly extracts the node with the highest f-score to process on. */
     while (data.heap->size > 1) {
         node = heap_extract(data.heap);
+        other_heap_least = data.other_heap->minimal;
+        other_node = maze_node(data.other_maze, node->x, node->y);
+        if (other_node != NULL && other_node->closed) {
+            int last_len, len = node->gs + other_node->gs;
+            node->closed = true;
+            this_heap_least = data.heap->minimal;
+            max_bound = this_heap_least > other_heap_least ? this_heap_least : other_heap_least;
+
+            assert(!pthread_mutex_lock(data.return_value_mutex));
+            last_len = data.return_value->min_len;
+            if (len < last_len) {
+                data.return_value->min_len = len;
+                data.return_value->x = node->x;
+                data.return_value->y = node->y;
+            }
+            assert(!pthread_mutex_unlock(data.return_value_mutex));
+            if (max_bound >= data.return_value->min_len) break;
+            else continue;
+        }
         /* initial four direction. */
         x_axis[0] = node->x + 1;
         y_axis[0] = node->y;
@@ -116,38 +135,11 @@ void *a_star_search(void *arguments) {
                 }
             }
         }
-        /* close node, */
-        offset = node->y * data.maze->cols + node->x;
-        data.maze->nodes[offset]->closed = true;
-        other_node = data.other_maze->nodes[offset];
-        if (other_node != NULL && !is_wall(data.other_maze, other_node)) {
-            int last_len, len = node->gs + other_node->gs;
-            int this_heap_least, other_heap_least, max_bound, last_bound;
-            if (data.heap->size > 1) this_heap_least = data.heap->nodes[1]->fs;
-            else this_heap_least = INT_MAX;
-            if (data.other_heap->size > 1) other_heap_least = data.other_heap->nodes[1]->fs;
-            else other_heap_least = INT_MAX;
-            max_bound = this_heap_least > other_heap_least ? this_heap_least : other_heap_least;
-            assert(!pthread_mutex_lock(data.finished_mutex));
-            last_len = data.return_value->min_len;
-            if (len < last_len) {
-                data.return_value->min_len = len;
-                data.return_value->x = node->x;
-                data.return_value->y = node->y;
-            }
-            last_bound = data.return_value->upper_bound;
-            if (max_bound < last_bound) data.return_value->upper_bound = max_bound;
-            if (data.return_value->upper_bound > data.return_value->min_len) {
-                assert(!pthread_mutex_unlock(data.finished_mutex));
-                break;
-            }
-            assert(!pthread_mutex_unlock(data.finished_mutex));
-        }
+        node->closed = true;
     }
     /* return to main thread. */
     assert(!pthread_mutex_lock(data.finished_mutex));
-    data.return_value->self = pthread_self();
-    assert(!pthread_cond_signal(data.finished));
+    assert(!pthread_cancel(data.other_thread));
     assert(!pthread_mutex_unlock(data.finished_mutex));
     return NULL;
 }
@@ -158,21 +150,21 @@ void *a_star_search(void *arguments) {
  */
 int main(int argc, char *argv[]) {
     maze_file_t *file = NULL;
-    pthread_cond_t finished = PTHREAD_COND_INITIALIZER;
     pthread_mutex_t finished_mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_t return_value_mutex = PTHREAD_MUTEX_INITIALIZER;
     a_star_argument_t argument_start, argument_goal;
     pthread_t from_start, from_goal;
     node_t *node = NULL;
-    a_star_return_t return_value = {-1, -1, INT_MAX, -1, -1};
+    a_star_return_t return_value = {-1, -1, INT_MAX};
     int count = 1;
 
-    assert(argc == 2);  /* Must have given the source file name. */
+    /* Must have given the source file name. */
+    assert(argc == 2);
     file = maze_file_init(argv[1]);
 
     /* Initializations. */
     argument_start.mem_pool = init_pool();
     argument_start.maze = maze_init(file->cols, file->rows, file->cols - 1, file->rows - 2);
-    argument_start.heap = heap_init();
     /* initialize first node. */
     node = node_init(alloc_node(argument_start.mem_pool), 1, 1);
     node->parent = NULL;
@@ -181,12 +173,11 @@ int main(int argc, char *argv[]) {
     /* modify maze.nodes. */
     maze_node(argument_start.maze, 1, 1) = node;
     /* insert first node. */
-    heap_insert(argument_start.heap, node);
+    argument_start.heap = heap_init(node);
 
     /* Initializations. */
     argument_goal.mem_pool = init_pool();
     argument_goal.maze = maze_init(file->cols, file->rows, 1, 0);
-    argument_goal.heap = heap_init();
     /* initialize first node. */
     node = node_init(alloc_node(argument_goal.mem_pool), file->cols - 2, file->rows - 2);
     node->parent = NULL;
@@ -195,7 +186,7 @@ int main(int argc, char *argv[]) {
     /* modify maze.nodes. */
     maze_node(argument_goal.maze, file->cols - 2, file->rows - 2) = node;
     /* insert first node. */
-    heap_insert(argument_goal.heap, node);
+    argument_goal.heap = heap_init(node);
 
     /* shared data. */
     argument_start.file = file;
@@ -204,29 +195,22 @@ int main(int argc, char *argv[]) {
     argument_goal.other_maze = argument_start.maze;
     argument_start.other_heap = argument_goal.heap;
     argument_goal.other_heap = argument_start.heap;
-    argument_start.finished = &finished;
-    argument_goal.finished = &finished;
     argument_start.finished_mutex = &finished_mutex;
     argument_goal.finished_mutex = &finished_mutex;
     argument_start.return_value = &return_value;
     argument_goal.return_value = &return_value;
+    argument_start.return_value_mutex = &return_value_mutex;
+    argument_goal.return_value_mutex = &return_value_mutex;
 
-
-    assert(!pthread_mutex_lock(&finished_mutex));
     /* create two threads. */
     assert(!pthread_create(&from_start, NULL, a_star_search, &argument_start));
     assert(!pthread_create(&from_goal, NULL, a_star_search, &argument_goal));
+    argument_start.other_thread = from_goal;
+    argument_goal.other_thread = from_start;
     /* join any of the two thread. */
-    assert(!pthread_cond_wait(&finished, &finished_mutex));
-    /* kill another thread. */
-    if (!pthread_equal(from_start, return_value.self))
-        assert(!pthread_cancel(from_start));
-    if (!pthread_equal(from_goal, return_value.self))
-        assert(!pthread_cancel(from_goal));
-
+    /* join two threads thread. */
     assert(!pthread_join(from_start, NULL));
     assert(!pthread_join(from_goal, NULL));
-    assert(!pthread_mutex_unlock(&finished_mutex));
 
     /* Print the steps back. */
     maze_lines(file, return_value.x, return_value.y) = '*';
