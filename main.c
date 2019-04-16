@@ -53,7 +53,6 @@ typedef struct a_star_return_t {
 typedef struct a_star_argument_t {
     const maze_file_t *file;
     const maze_t *other_maze;
-    const heap_t *other_heap;
     mem_pool_t *mem_pool;
     maze_t *maze;
     heap_t *heap;
@@ -69,19 +68,14 @@ void *a_star_search(void *arguments) {
     a_star_argument_t data = *(a_star_argument_t *) arguments;
     node_t *node = NULL, *other_node = NULL;
     int i = 0;
-    int this_heap_least, other_heap_least, max_bound;
     assert(!pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL));
     /* Loop and repeatedly extracts the node with the highest f-score to process on. */
     while (data.heap->size > 1) {
         node = heap_extract(data.heap);
-        other_heap_least = data.other_heap->minimal;
         other_node = maze_node(data.other_maze, node->x, node->y);
         if (other_node != NULL && other_node->closed) {
             int last_len, len = node->gs + other_node->gs;
             node->closed = true;
-            this_heap_least = data.heap->minimal;
-            max_bound = this_heap_least > other_heap_least ? this_heap_least : other_heap_least;
-
             assert(!pthread_mutex_lock(data.return_value_mutex));
             last_len = data.return_value->min_len;
             if (len < last_len) {
@@ -90,7 +84,7 @@ void *a_star_search(void *arguments) {
                 data.return_value->y = node->y;
             }
             assert(!pthread_mutex_unlock(data.return_value_mutex));
-            if (max_bound >= data.return_value->min_len) break;
+            if (data.heap->size <= 1 || data.heap->nodes[1]->fs >= data.return_value->min_len) break;
             else continue;
         }
         /* initial four direction. */
@@ -193,8 +187,6 @@ int main(int argc, char *argv[]) {
     argument_goal.file = file;
     argument_start.other_maze = argument_goal.maze;
     argument_goal.other_maze = argument_start.maze;
-    argument_start.other_heap = argument_goal.heap;
-    argument_goal.other_heap = argument_start.heap;
     argument_start.finished_mutex = &finished_mutex;
     argument_goal.finished_mutex = &finished_mutex;
     argument_start.return_value = &return_value;

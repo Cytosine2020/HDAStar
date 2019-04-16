@@ -24,7 +24,6 @@ typedef struct heap_t {
     node_t **nodes;     /* Array of node pointers. */
     int size;           /* Current size. */
     int capacity;       /* Temporary capacity. */
-    int minimal;
 } heap_t;
 
 /* Function prototypes. */

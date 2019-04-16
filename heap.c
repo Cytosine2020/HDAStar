@@ -25,7 +25,6 @@ heap_t *heap_init(node_t *node) {
     /*memset(heap->nodes, 0, INIT_CAPACITY * sizeof(node_t *));*/
     heap->nodes[1] = node;
     node->heap_id = 1;
-    heap->minimal = node->fs;
     return heap;
 }
 
@@ -79,7 +78,6 @@ node_t *heap_extract(heap_t *heap) {
     }
     heap->nodes[cur] = last;
     last->heap_id = cur;
-    heap->minimal = ret->fs;
     return ret;
 }
 

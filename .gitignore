@@ -1,3 +1,5 @@
 maze-*.txt
 .idea/*
 cmake-build*/*
+*.o
+astar
