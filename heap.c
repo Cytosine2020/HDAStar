@@ -17,15 +17,11 @@
  * Initialize a min heap. The heap is constructed using array-based
  *   implementation. Returns the pointer to the new heap.
  */
-heap_t *heap_init(node_t *node) {
-    heap_t *heap = malloc(sizeof(heap_t));
-    heap->size = 2;
+void heap_init(heap_t *heap) {
+    heap->size = 1;
     heap->capacity = INIT_CAPACITY;    /* Initial capacity = 1024. */
     heap->nodes = malloc(INIT_CAPACITY * sizeof(node_t *));
     /*memset(heap->nodes, 0, INIT_CAPACITY * sizeof(node_t *));*/
-    heap->nodes[1] = node;
-    node->heap_id = 1;
-    return heap;
 }
 
 /**
@@ -33,28 +29,6 @@ heap_t *heap_init(node_t *node) {
  */
 void heap_destroy(heap_t *heap) {
     free(heap->nodes);
-    free(heap);
-}
-
-/**
- * Insert a node N into the min heap H.
- */
-void heap_insert(heap_t *heap, node_t *node) {
-    int cur = heap->size++;    /* Index 0 lays dummy node, so increment first. */
-    /* If will exceed current capacity, doubles the capacity. */
-    if (heap->size > heap->capacity) {
-        int old_cap = heap->capacity;
-        heap->capacity = old_cap * 2;
-        heap->nodes = realloc(heap->nodes, heap->capacity * sizeof(node_t *));
-        /*memset(heap->nodes + old_cap, 0, old_cap * sizeof(node_t *));*/
-    }
-    while (cur > 1 && node_less(node, heap->nodes[cur / 2])) {
-        heap->nodes[cur] = heap->nodes[cur / 2];
-        heap->nodes[cur]->heap_id = cur;
-        cur /= 2;
-    }
-    heap->nodes[cur] = node;
-    node->heap_id = cur;
 }
 
 /**
@@ -78,6 +52,7 @@ node_t *heap_extract(heap_t *heap) {
     }
     heap->nodes[cur] = last;
     last->heap_id = cur;
+    ret->heap_id = 0;
     return ret;
 }
 
@@ -86,6 +61,15 @@ node_t *heap_extract(heap_t *heap) {
  */
 void heap_update(heap_t *heap, node_t *node) {
     int cur = node->heap_id;
+    if (cur == 0) {
+        cur = heap->size++;
+        if (heap->size > heap->capacity) {
+            int old_cap = heap->capacity;
+            heap->capacity = old_cap * 2;
+            heap->nodes = realloc(heap->nodes, heap->capacity * sizeof(node_t *));
+            /*memset(heap->nodes + old_cap, 0, old_cap * sizeof(node_t *));*/
+        }
+    }
     while (cur > 1 && node_less(node, heap->nodes[cur / 2])) {
         heap->nodes[cur] = heap->nodes[cur / 2];
         heap->nodes[cur]->heap_id = cur;

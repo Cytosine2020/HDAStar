@@ -14,9 +14,6 @@
 #define node_less(n1, n2)   ((n1)->fs < (n2)->fs)
 #define MEM_MAP_SIZE        (0x10000)
 
-#define true  (1)
-#define false (0)
-typedef int bool;
 
 /**
  * Structure of a block cell node.
@@ -28,7 +25,6 @@ typedef struct node_t {
     int gs;                     /* A* g-score. */
     int fs;                     /* A* f-score. */
     int heap_id;                /* Position on min heap, used by updating. */
-    bool closed;
 } node_t;
 
 typedef struct mem_pool_t {
@@ -41,10 +37,10 @@ typedef struct mem_pool_t {
 /* Function prototypes. */
 node_t *node_init(node_t *node, int x, int y);
 
-mem_pool_t *init_pool();
+void mem_pool_init(mem_pool_t *pool);
 
 node_t *alloc_node(mem_pool_t *mem_pool);
 
-void release_pool(mem_pool_t *mem_pool);
+void mem_pool_destroy(mem_pool_t *mem_pool);
 
 #endif
