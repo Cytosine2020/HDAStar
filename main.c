@@ -128,7 +128,7 @@ void *hda_star_search(hda_argument_t *arguments) {
         /* modify maze.nodes. */
         maze_node(arguments->maze, arguments->maze->start_x, arguments->maze->start_y) = node;
         /* insert first node. */
-        heap_update(&heap, node);
+        heap_insert(&heap, node);
     }
 
     /* main loop. */
@@ -137,9 +137,9 @@ void *hda_star_search(hda_argument_t *arguments) {
             /* if there are nodes in heap. */
             node = heap_extract(&heap);
             /* if the node is worse than currently found best path */
-            if (node->gs + 1 >= arguments->return_value->min_len) {
+            if (node->gs >= arguments->return_value->min_len) {
                 /* dump heap and add number of nodes to message received. */
-                arguments->msg_received[arguments->thread_id] += heap.size - 1;
+                arguments->msg_received[arguments->thread_id] += heap.size;
                 heap.size = 1;
                 continue;
             }
@@ -202,7 +202,8 @@ void *hda_star_search(hda_argument_t *arguments) {
                     msg_received_sum += arguments->msg_received[i];
                 for (i = 0; i < arguments->thread_num; i++)
                     msg_sent_sum += arguments->msg_sent[i];
-                if (arguments->return_value->min_len < INT_MAX && msg_sent_sum == msg_received_sum) {
+                if (*arguments->finished ||
+                    (arguments->return_value->min_len < INT_MAX && msg_sent_sum == msg_received_sum)) {
                     *arguments->finished = 1;
                     goto hda_star_search_end;
                 }
@@ -226,13 +227,16 @@ void *hda_star_search(hda_argument_t *arguments) {
 
             /* update if improved. */
             if (msg->gs < adj->gs) {
-                if (adj->heap_id != 0)
-                    ++arguments->msg_received[arguments->thread_id];
                 /* modify node. */
                 adj->parent = msg->parent;
                 adj->gs = msg->gs;
                 adj->fs = adj->gs + heuristic(adj, get_goal(arguments->maze));
-                heap_update(&heap, adj);
+                if (adj->heap_id != 0) {
+                    heap_update(&heap, adj);
+                    ++arguments->msg_received[arguments->thread_id];
+                } else {
+                    heap_insert(&heap, adj);
+                }
             } else {
                 ++arguments->msg_received[arguments->thread_id];
             }
@@ -290,6 +294,7 @@ void *a_star_search(a_star_argument_t *arguments) {
     free(message_queue);
     free(msg_sent);
     free(msg_received);
+    free(args_for_threads);
     return NULL;
 }
 
@@ -315,7 +320,6 @@ int main(int argc, char *argv[]) {
     maze_file_init(&file, argv[1]);
     maze_init(&from_start_maze, file.cols, file.rows, 1, 1, file.cols - 1, file.rows - 2);
     maze_init(&from_goal_maze, file.cols, file.rows, file.cols - 2, file.rows - 2, 0, 1);
-
     /* shared arguments-> */
     argument_start.file = &file;
     argument_goal.file = &file;

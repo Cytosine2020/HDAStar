@@ -57,19 +57,31 @@ node_t *heap_extract(heap_t *heap) {
 }
 
 /**
+ * Insert a node N into the min heap H.
+ */
+void heap_insert(heap_t *heap, node_t *node) {
+    int cur = heap->size++;    /* Index 0 lays dummy node, so increment first. */
+    /* If will exceed current capacity, doubles the capacity. */
+    if (heap->size > heap->capacity) {
+        int old_cap = heap->capacity;
+        heap->capacity = old_cap * 2;
+        heap->nodes = realloc(heap->nodes, heap->capacity * sizeof(node_t *));
+        /*memset(heap->nodes + old_cap, 0, old_cap * sizeof(node_t *));*/
+    }
+    while (cur > 1 && node_less(node, heap->nodes[cur / 2])) {
+        heap->nodes[cur] = heap->nodes[cur / 2];
+        heap->nodes[cur]->heap_id = cur;
+        cur /= 2;
+    }
+    heap->nodes[cur] = node;
+    node->heap_id = cur;
+}
+
+/**
  * Update the min heap H in case that node N has changed its f-score.
  */
 void heap_update(heap_t *heap, node_t *node) {
     int cur = node->heap_id;
-    if (cur == 0) {
-        cur = heap->size++;
-        if (heap->size > heap->capacity) {
-            int old_cap = heap->capacity;
-            heap->capacity = old_cap * 2;
-            heap->nodes = realloc(heap->nodes, heap->capacity * sizeof(node_t *));
-            /*memset(heap->nodes + old_cap, 0, old_cap * sizeof(node_t *));*/
-        }
-    }
     while (cur > 1 && node_less(node, heap->nodes[cur / 2])) {
         heap->nodes[cur] = heap->nodes[cur / 2];
         heap->nodes[cur]->heap_id = cur;

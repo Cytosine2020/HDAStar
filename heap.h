@@ -33,6 +33,8 @@ void heap_destroy(heap_t *heap);
 
 node_t *heap_extract(heap_t *heap);
 
+void heap_insert(heap_t *heap, node_t *node);
+
 void heap_update(heap_t *heap, node_t *node);
 
 #endif
