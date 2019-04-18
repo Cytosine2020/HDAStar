@@ -19,7 +19,6 @@
 #define maze_lines(file, x, y)      ((file)->lines[y][x])
 #define get_goal(maze)              (&((maze)->goal))
 #define get_wall(maze)              (&((maze)->wall))
-#define is_wall(maze, ptr)          ((ptr) == &((maze)->wall))
 
 
 typedef struct maze_file_t {
@@ -39,10 +38,12 @@ typedef struct maze_t {
     node_t goal;            /* Goal node. */
     node_t wall;            /* Wall node. */
     int cols;               /* Number of cols. */
+    int start_x;
+    int start_y;
 } maze_t;
 
 /* Function prototypes. */
-maze_t *maze_init(int cols, int rows, int goal_x, int goal_y);
+maze_t *maze_init(int cols, int rows, int start_x, int start_y, int goal_x, int goal_y);
 
 void maze_destroy(maze_t *maze);
 

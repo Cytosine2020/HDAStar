@@ -41,10 +41,10 @@ typedef struct mem_pool_t {
 /* Function prototypes. */
 node_t *node_init(node_t *node, int x, int y);
 
-mem_pool_t *init_pool();
+void pool_init(mem_pool_t *pool);
 
 node_t *alloc_node(mem_pool_t *mem_pool);
 
-void release_pool(mem_pool_t *mem_pool);
+void pool_destroy(mem_pool_t *mem_pool);
 
 #endif
