@@ -41,11 +41,11 @@ typedef struct maze_t {
 } maze_t;
 
 /* Function prototypes. */
-void maze_init(maze_t *maze, int cols, int rows, int start_x, int start_y, int goal_x, int goal_y);
+maze_t *maze_init(int cols, int rows, int start_x, int start_y, int goal_x, int goal_y);
 
 void maze_destroy(maze_t *maze);
 
-void maze_file_init(maze_file_t *file, char *filename);
+maze_file_t *maze_file_init(char *filename);
 
 void maze_file_destroy(maze_file_t *file);
 

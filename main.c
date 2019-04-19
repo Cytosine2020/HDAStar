@@ -35,9 +35,8 @@
 #include <stdlib.h>     /* NULL */
 #include <assert.h>     /* assert */
 #include <pthread.h>
-#include <bits/sigthread.h>
-#include <zconf.h>
-#include "sys/sysinfo.h"
+#include <limits.h>
+#include <sys/sysinfo.h>
 
 #include "heap.h"
 #include "node.h"
@@ -303,65 +302,79 @@ void *a_star_search(a_star_argument_t *arguments) {
  *   including I/O. Parallel and optimize as much as you can.
  */
 int main(int argc, char *argv[]) {
-    maze_file_t file;
-    maze_t from_start_maze, from_goal_maze;
-    pthread_mutex_t return_value_mutex = PTHREAD_MUTEX_INITIALIZER;
-    a_star_argument_t argument_start, argument_goal;
+    maze_file_t *file = NULL;
+    maze_t *from_start_maze = NULL, *from_goal_maze = NULL;
+    pthread_mutex_t *return_value_mutex = NULL;
+    a_star_return_t *return_value = NULL;
+    size_t thread_num = get_nprocs();
+    size_t *finished = NULL;
+    a_star_argument_t *argument_start = NULL, *argument_goal = NULL;
     pthread_t from_start, from_goal;
     node_t *node = NULL;
-    a_star_return_t return_value = {-1, -1, INT_MAX};
-    size_t thread_num = get_nprocs();
-    size_t finished = 0;
-    int count = 1;
+    size_t count = 1;
 
     /* Must have given the source file name. */
     assert(argc == 2);
     /* Initializations. */
-    maze_file_init(&file, argv[1]);
-    maze_init(&from_start_maze, file.cols, file.rows, 1, 1, file.cols - 1, file.rows - 2);
-    maze_init(&from_goal_maze, file.cols, file.rows, file.cols - 2, file.rows - 2, 0, 1);
+    file = maze_file_init(argv[1]);
+    from_start_maze = maze_init(file->cols, file->rows, 1, 1, file->cols - 1, file->rows - 2);
+    from_goal_maze = maze_init(file->cols, file->rows, file->cols - 2, file->rows - 2, 0, 1);
+    return_value_mutex = malloc(sizeof(pthread_mutex_t));
+    pthread_mutex_init(return_value_mutex, NULL);
+    return_value = malloc(sizeof(a_star_return_t));
+    return_value->min_len = INT_MAX;
+    return_value->x = -1;
+    return_value->y = -1;
+    finished = malloc(sizeof(size_t));
+    *finished = 0;
+    argument_start = malloc(sizeof(a_star_argument_t));
+    argument_goal = malloc(sizeof(a_star_argument_t));
     /* shared arguments-> */
-    argument_start.file = &file;
-    argument_goal.file = &file;
-    argument_start.other_maze = &from_goal_maze;
-    argument_goal.other_maze = &from_start_maze;
-    argument_start.maze = &from_start_maze;
-    argument_goal.maze = &from_goal_maze;
-    argument_start.return_value_mutex = &return_value_mutex;
-    argument_goal.return_value_mutex = &return_value_mutex;
-    argument_start.return_value = &return_value;
-    argument_goal.return_value = &return_value;
-    argument_start.thread_num = thread_num / 2;
-    argument_goal.thread_num = thread_num / 2;
-    argument_start.finished = &finished;
-    argument_goal.finished = &finished;
+    argument_start->file = file;
+    argument_goal->file = file;
+    argument_start->other_maze = from_goal_maze;
+    argument_goal->other_maze = from_start_maze;
+    argument_start->maze = from_start_maze;
+    argument_goal->maze = from_goal_maze;
+    argument_start->return_value_mutex = return_value_mutex;
+    argument_goal->return_value_mutex = return_value_mutex;
+    argument_start->return_value = return_value;
+    argument_goal->return_value = return_value;
+    argument_start->thread_num = thread_num / 2;
+    argument_goal->thread_num = thread_num / 2;
+    argument_start->finished = finished;
+    argument_goal->finished = finished;
 
     /* create two threads. */
-    assert(!pthread_create(&from_start, NULL, (void *(*)(void *)) a_star_search, &argument_start));
-    assert(!pthread_create(&from_goal, NULL, (void *(*)(void *)) a_star_search, &argument_goal));
-    /* join any of the two thread. */
+    assert(!pthread_create(&from_start, NULL, (void *(*)(void *)) a_star_search, argument_start));
+    assert(!pthread_create(&from_goal, NULL, (void *(*)(void *)) a_star_search, argument_goal));
     /* join two threads thread. */
     assert(!pthread_join(from_start, NULL));
     assert(!pthread_join(from_goal, NULL));
 
     /* Print the steps back. */
-    maze_lines(&file, return_value.x, return_value.y) = '*';
-    node = maze_node(argument_start.maze, return_value.x, return_value.y)->parent;
+    maze_lines(file, return_value->x, return_value->y) = '*';
+    node = maze_node(argument_start->maze, return_value->x, return_value->y)->parent;
     while (node != NULL) {
-        maze_lines(&file, node->x, node->y) = '*';
+        maze_lines(file, node->x, node->y) = '*';
         node = node->parent;
         count++;
     }
-    node = maze_node(argument_goal.maze, return_value.x, return_value.y)->parent;
+    node = maze_node(argument_goal->maze, return_value->x, return_value->y)->parent;
     while (node != NULL) {
-        maze_lines(&file, node->x, node->y) = '*';
+        maze_lines(file, node->x, node->y) = '*';
         node = node->parent;
         count++;
     }
-    printf("%d\n", count);
+    printf("%ld\n", count);
     /* Free resources and return. */
-    maze_destroy(argument_start.maze);
-    maze_destroy(argument_goal.maze);
-    maze_file_destroy(&file);
+    maze_file_destroy(file);
+    maze_destroy(argument_start->maze);
+    maze_destroy(argument_goal->maze);
+    free(return_value_mutex);
+    free(return_value);
+    free(finished);
+    free(argument_start);
+    free(argument_goal);
     return 0;
 }
