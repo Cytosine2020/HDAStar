@@ -21,7 +21,6 @@ void heap_init(heap_t *heap) {
     heap->size = 1;
     heap->capacity = INIT_CAPACITY;    /* Initial capacity = 1024. */
     heap->nodes = malloc(INIT_CAPACITY * sizeof(node_t *));
-    /*memset(heap->nodes, 0, INIT_CAPACITY * sizeof(node_t *));*/
 }
 
 /**
