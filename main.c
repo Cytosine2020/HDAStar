@@ -198,6 +198,20 @@ int main(int argc, char *argv[]) {
     assert(!pthread_join(from_start, NULL));
     assert(!pthread_join(from_goal, NULL));
 
+    {
+        size_t path_node = 0, open_node = 0;
+        size_t x = 0, y = 0, rows = file->rows, cols = file->cols;
+        for (y = 0; y < rows; y++) {
+            for (x = 0; x < cols; x++) {
+                if (maze_lines(file, x, y) != '#')
+                    path_node += 1;
+                if (maze_node(maze_start, x, y) != NULL || maze_node(maze_goal, x, y) != NULL)
+                    open_node += 1;
+            }
+        }
+        printf("%ld %ld\n", path_node, open_node);
+    }
+
     /* Print the steps back. */
     maze_lines(file, return_value->x, return_value->y) = '*';
     node = maze_node(argument_start->maze, return_value->x, return_value->y)->parent;
@@ -215,8 +229,8 @@ int main(int argc, char *argv[]) {
     printf("%d\n", count);
     /* Free resources and return. */
     maze_file_destroy(file);
-    maze_destroy(argument_start->maze);
-    maze_destroy(argument_goal->maze);
+    maze_destroy(maze_start);
+    maze_destroy(maze_goal);
     free(return_value_mutex);
     free(return_value);
     free(finished);

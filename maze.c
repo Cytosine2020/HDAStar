@@ -33,10 +33,7 @@ maze_t *maze_init(int cols, int rows, int start_x, int start_y, int goal_x, int 
     memset(maze->nodes, 0, size);
     /* initial special nodes. */
     node_init(&maze->goal, goal_x, goal_y);
-    node_init(&maze->wall, -1, -1);
     /* set start and goal as wall */
-    maze->nodes[cols] = get_wall(maze);
-    maze->nodes[(rows - 1) * cols - 1] = get_wall(maze);
     maze->start_x = start_x;
     maze->start_y = start_y;
     return maze;

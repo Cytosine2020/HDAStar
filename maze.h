@@ -18,7 +18,6 @@
 #define maze_node(maze, x, y)       ((maze)->nodes[(y) * (maze)->cols + (x)])
 #define maze_lines(file, x, y)      ((file)->lines[y][x])
 #define get_goal(maze)              (&((maze)->goal))
-#define get_wall(maze)              (&((maze)->wall))
 
 
 typedef struct maze_file_t {
@@ -36,7 +35,6 @@ typedef struct maze_file_t {
 typedef struct maze_t {
     node_t **nodes;         /* Array of node. */
     node_t goal;            /* Goal node. */
-    node_t wall;            /* Wall node. */
     int cols;               /* Number of cols. */
     int start_x;
     int start_y;
