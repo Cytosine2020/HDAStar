@@ -71,7 +71,6 @@ typedef struct hda_message_t {
 } hda_message_t;
 
 typedef struct hda_mq_t {
-    pthread_mutex_t mutex;
     hda_message_t *head;
 } hda_mq_t;
 
@@ -89,7 +88,6 @@ typedef struct hda_argument_t {
 } hda_argument_t;
 
 void hda_mq_init(hda_mq_t *mq) {
-    pthread_mutex_init(&mq->mutex, NULL);
     mq->head = NULL;
 }
 
@@ -104,24 +102,21 @@ void hda_mq_destroy(hda_mq_t *mq) {
 void *hda_star_search(hda_argument_t *arguments) {
     mem_pool_t mem_pool;
     heap_t heap;
-    node_t *node = NULL, *other_node = NULL;
-    hda_message_t *msg = NULL, *next_msg = NULL;
-    int x_axis[4] = {0, 0, 0, 0};
-    int y_axis[4] = {0, 0, 0, 0};
-    int gs = 0;
-    size_t i = 0;
-    size_t id;
-    hda_mq_t *mq;
+    node_t *node, *other_node;
+    hda_message_t *msg, *next_msg;
+    size_t *msg_sent = &arguments->msg_sent[arguments->thread_id];
+    size_t *msg_received = &arguments->msg_received[arguments->thread_id];
+    hda_mq_t *msg_queue = &arguments->mqs[arguments->thread_id];
+
     /* init and set up cleanups. */
     mem_pool_init(&mem_pool);
     heap_init(&heap);
     /* add start. */
-    id = hash_distribute(arguments->thread_num, arguments->maze->start_x, arguments->maze->start_y);
-    if (id == arguments->thread_id) {
+    if (hash_distribute(arguments->thread_num, arguments->maze->start_x, arguments->maze->start_y) ==
+        arguments->thread_id) {
         /* initialize first node. */
-        ++arguments->msg_sent[arguments->thread_id];
+        ++*msg_sent;
         node = node_init(alloc_node(&mem_pool), arguments->maze->start_x, arguments->maze->start_y);
-        node->parent = NULL;
         node->gs = 1;
         node->fs = 1 + heuristic(node, get_goal(arguments->maze));
         /* modify maze.nodes. */
@@ -138,7 +133,7 @@ void *hda_star_search(hda_argument_t *arguments) {
             /* if the node is worse than currently found best path */
             if (node->gs >= arguments->return_value->min_len) {
                 /* dump heap and add number of nodes to message received. */
-                arguments->msg_received[arguments->thread_id] += heap.size;
+                *msg_received += heap.size;
                 heap.size = 1;
                 continue;
             }
@@ -156,6 +151,10 @@ void *hda_star_search(hda_argument_t *arguments) {
                 }
                 assert(!pthread_mutex_unlock(arguments->return_value_mutex));
             } else {
+                int x_axis[4], y_axis[4];
+                int gs;
+                size_t i;
+                size_t id;
                 /* initial four direction. */
                 x_axis[0] = node->x + 1;
                 y_axis[0] = node->y;
@@ -170,7 +169,8 @@ void *hda_star_search(hda_argument_t *arguments) {
                 for (i = 0; i < 4; ++i) {
                     /* send if not wall. */
                     if (maze_lines(arguments->file, x_axis[i], y_axis[i]) != '#') {
-                        hda_message_t *new_msg = NULL;
+                        hda_message_t *new_msg;
+                        hda_mq_t *mq;
                         /* pick msg queue. */
                         id = hash_distribute(arguments->thread_num, x_axis[i], y_axis[i]);
                         mq = &arguments->mqs[id];
@@ -181,21 +181,27 @@ void *hda_star_search(hda_argument_t *arguments) {
                         new_msg->y = y_axis[i];
                         new_msg->gs = gs;
                         /* message sent add one */
-                        ++arguments->msg_sent[arguments->thread_id];
+                        ++*msg_sent;
                         /* send message. */
-                        assert(!pthread_mutex_lock(&mq->mutex));
-                        new_msg->next = mq->head;
-                        mq->head = new_msg;
-                        assert(!pthread_mutex_unlock(&mq->mutex));
+
+                        __asm__ __volatile__(
+                        "       mov         %E[ptr], %%rax;     "
+                        "hda_mq_send_loop:                      "
+                        "       mov         %%rax, %E[next];    "
+                        "lock   cmpxchg     %[msg], %E[ptr];    "
+                        "       jnz         hda_mq_send_loop;   "
+                        :
+                        :[ptr] "r"(&mq->head), [next] "r"(&new_msg->next), [msg] "r"(new_msg)
+                        :"rax", "cc", "memory");
                     }
                 }
             }
             /* message received add one */
-            ++arguments->msg_received[arguments->thread_id];
+            ++*msg_received;
         } else {
             /* no nodes in heap. */
-            while (arguments->mqs[arguments->thread_id].head == NULL) {
-                int msg_sent_sum = 0, msg_received_sum = 0;
+            while (msg_queue->head == NULL) {
+                size_t msg_sent_sum = 0, msg_received_sum = 0, i;
                 /* barrier hit. If end, thread will stuck here and wait for cancel. */
                 for (i = 0; i < arguments->thread_num; i++)
                     msg_received_sum += arguments->msg_received[i];
@@ -209,10 +215,14 @@ void *hda_star_search(hda_argument_t *arguments) {
             }
         }
         /* receive message. */
-        assert(!pthread_mutex_lock(&arguments->mqs[arguments->thread_id].mutex));
-        msg = arguments->mqs[arguments->thread_id].head;
-        arguments->mqs[arguments->thread_id].head = NULL;
-        assert(!pthread_mutex_unlock(&arguments->mqs[arguments->thread_id].mutex));
+        msg = NULL;
+
+        __asm__ __volatile__(
+        "lock   xchg        %[msg], %E[ptr];    "
+        :[msg] "+r"(msg)
+        :[ptr] "r"(&msg_queue->head)
+        : "memory");
+
         /* add all nodes in message queue. */
         for (; msg != NULL; msg = next_msg) {
             node_t **adj_ptr = &maze_node(arguments->maze, msg->x, msg->y);
@@ -232,12 +242,12 @@ void *hda_star_search(hda_argument_t *arguments) {
                 adj->fs = adj->gs + heuristic(adj, get_goal(arguments->maze));
                 if (adj->heap_id != 0) {
                     heap_update(&heap, adj);
-                    ++arguments->msg_received[arguments->thread_id];
+                    ++*msg_received;
                 } else {
                     heap_insert(&heap, adj);
                 }
             } else {
-                ++arguments->msg_received[arguments->thread_id];
+                ++*msg_received;
             }
             next_msg = msg->next;
             free(msg);
