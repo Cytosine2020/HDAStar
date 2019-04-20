@@ -13,7 +13,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <zconf.h>
+#include <unistd.h>
 #include <memory.h>
 
 #include "maze.h"
@@ -23,7 +23,7 @@
  * Initialize a maze from a formatted source file named FILENAME. Returns the
  *   pointer to the new maze.
  */
-maze_t *maze_init(int cols, int rows, int goal_x, int goal_y) {
+maze_t *maze_init(int cols, int rows, int start_x, int start_y, int goal_x, int goal_y) {
     maze_t *maze = malloc(sizeof(maze_t));
     size_t size;
     /* Allocate space for all nodes (cells) inside the maze. */
@@ -33,10 +33,8 @@ maze_t *maze_init(int cols, int rows, int goal_x, int goal_y) {
     memset(maze->nodes, 0, size);
     /* initial special nodes. */
     node_init(&maze->goal, goal_x, goal_y);
-    node_init(&maze->wall, -1, -1);
-    /* set start and goal as wall */
-    maze->nodes[cols] = get_wall(maze);
-    maze->nodes[(rows - 1) * cols - 1] = get_wall(maze);
+    maze->start_x = start_x;
+    maze->start_y = start_y;
     return maze;
 }
 
@@ -63,7 +61,7 @@ maze_file_t *maze_file_init(char *filename) {
             NULL,
             (size_t) status.st_size,
             PROT_READ | PROT_WRITE,
-            MAP_SHARED | MAP_FILE,
+            MAP_SHARED,
             file->fd, 0);
     assert(file->mem_map != MAP_FAILED);
 
@@ -83,10 +81,15 @@ maze_file_t *maze_file_init(char *filename) {
         file->lines[i] = file_ptr;
         file_ptr += file->cols;
     }
+
+    maze_lines(file, 0, 1) = '#';
+    maze_lines(file, cols - 1, rows - 2) = '#';
     return file;
 }
 
 void maze_file_destroy(maze_file_t *file) {
+    maze_lines(file, 0, 1) = '@';
+    maze_lines(file, file->cols - 1, file->rows - 2) = '%';
     free(file->lines);
     msync(file->mem_map, file->mem_size, MS_ASYNC | MS_INVALIDATE);
     munmap(file->mem_map, file->mem_size);

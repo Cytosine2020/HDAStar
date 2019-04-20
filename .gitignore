@@ -3,3 +3,4 @@ maze-*.txt
 cmake-build*/*
 *.o
 astar
+*.tar
