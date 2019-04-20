@@ -303,7 +303,7 @@ void *a_star_search(a_star_argument_t *arguments) {
  */
 int main(int argc, char *argv[]) {
     maze_file_t *file = NULL;
-    maze_t *from_start_maze = NULL, *from_goal_maze = NULL;
+    maze_t *start_maze = NULL, *goal_maze = NULL;
     pthread_mutex_t *return_value_mutex = NULL;
     a_star_return_t *return_value = NULL;
     size_t thread_num = get_nprocs();
@@ -317,8 +317,8 @@ int main(int argc, char *argv[]) {
     assert(argc == 2);
     /* Initializations. */
     file = maze_file_init(argv[1]);
-    from_start_maze = maze_init(file->cols, file->rows, 1, 1, file->cols - 1, file->rows - 2);
-    from_goal_maze = maze_init(file->cols, file->rows, file->cols - 2, file->rows - 2, 0, 1);
+    start_maze = maze_init(file->cols, file->rows, 1, 1, file->cols - 1, file->rows - 2);
+    goal_maze = maze_init(file->cols, file->rows, file->cols - 2, file->rows - 2, 0, 1);
     return_value_mutex = malloc(sizeof(pthread_mutex_t));
     pthread_mutex_init(return_value_mutex, NULL);
     return_value = malloc(sizeof(a_star_return_t));
@@ -332,10 +332,10 @@ int main(int argc, char *argv[]) {
     /* shared arguments-> */
     argument_start->file = file;
     argument_goal->file = file;
-    argument_start->other_maze = from_goal_maze;
-    argument_goal->other_maze = from_start_maze;
-    argument_start->maze = from_start_maze;
-    argument_goal->maze = from_goal_maze;
+    argument_start->other_maze = goal_maze;
+    argument_goal->other_maze = start_maze;
+    argument_start->maze = start_maze;
+    argument_goal->maze = goal_maze;
     argument_start->return_value_mutex = return_value_mutex;
     argument_goal->return_value_mutex = return_value_mutex;
     argument_start->return_value = return_value;
@@ -351,6 +351,20 @@ int main(int argc, char *argv[]) {
     /* join two threads thread. */
     assert(!pthread_join(from_start, NULL));
     assert(!pthread_join(from_goal, NULL));
+
+    {
+        size_t path_node = 0, open_node = 0;
+        size_t x = 0, y = 0, rows = file->rows, cols = file->cols;
+        for (y = 0; y < rows; y++) {
+            for (x = 0; x < cols; x++) {
+                if (maze_lines(file, x, y) != '#')
+                    path_node += 1;
+                if (maze_node(start_maze, x, y) != NULL || maze_node(goal_maze, x, y) != NULL)
+                    open_node += 1;
+            }
+        }
+        printf("%ld %ld\n", path_node, open_node);
+    }
 
     /* Print the steps back. */
     maze_lines(file, return_value->x, return_value->y) = '*';
@@ -369,8 +383,8 @@ int main(int argc, char *argv[]) {
     printf("%ld\n", count);
     /* Free resources and return. */
     maze_file_destroy(file);
-    maze_destroy(argument_start->maze);
-    maze_destroy(argument_goal->maze);
+    maze_destroy(start_maze);
+    maze_destroy(goal_maze);
     free(return_value_mutex);
     free(return_value);
     free(finished);
