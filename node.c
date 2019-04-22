@@ -8,7 +8,9 @@
  * Jose @ ShanghaiTech University
  */
 
+#ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
 #include <stdlib.h>     /* NULL, malloc, free */
 #include <limits.h>     /* INT_MAX */
 #include <sys/mman.h>
