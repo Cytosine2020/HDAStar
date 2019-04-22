@@ -135,15 +135,18 @@ void update_return_value(pthread_mutex_t *mutex, a_star_return_t *return_value, 
 
 void open_node(hda_argument_t *args, node_t *parent, int x, int y, size_t *msg_sent) {
     if (maze_lines(args->file, x, y) != '#') {
-        hda_message_t *msg = malloc(sizeof(hda_message_t));
-        msg->parent = parent;
-        msg->x = x;
-        msg->y = y;
-        msg->gs = parent->gs + 1;
-        /* message sent add one */
-        ++*msg_sent;
-        /* send message. */
-        hda_mq_send(&args->mqs[hash_distribute(args->thread_num, x, y)], msg);
+        node_t *node = maze_node(args->maze, x, y);
+        if (node == NULL || parent->gs + 1 < node->gs) {
+            hda_message_t *msg = malloc(sizeof(hda_message_t));
+            msg->parent = parent;
+            msg->x = x;
+            msg->y = y;
+            msg->gs = parent->gs + 1;
+            /* message sent add one */
+            ++*msg_sent;
+            /* send message. */
+            hda_mq_send(&args->mqs[hash_distribute(args->thread_num, x, y)], msg);
+        }
     }
 }
 
@@ -365,7 +368,7 @@ int main(int argc, char *argv[]) {
     assert(!pthread_join(from_start, NULL));
     assert(!pthread_join(from_goal, NULL));
 
-    {
+/*    {
         size_t path_node = 0, open_node = 0;
         size_t x = 0, y = 0, rows = file->rows, cols = file->cols;
         for (y = 0; y < rows; y++) {
@@ -377,7 +380,7 @@ int main(int argc, char *argv[]) {
             }
         }
         printf("%ld %ld\n", path_node, open_node);
-    }
+    }*/
 
     /* Print the steps back. */
     maze_lines(file, return_value->x, return_value->y) = '*';
