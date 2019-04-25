@@ -32,10 +32,15 @@
  * Jose @ ShanghaiTech University
  */
 
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <stdlib.h>     /* NULL */
 #include <assert.h>     /* assert */
 #include <pthread.h>
 #include <limits.h>
+#include <sys/mman.h>
 #include <sys/sysinfo.h>
 
 #include "heap.h"
@@ -44,7 +49,7 @@
 #include "compass.h"    /* The heuristic. */
 
 #define hash_distribute(num, x, y)      (((x) + (y)) % num)
-
+#define MSG_MEM_MAP_SIZE    (0X10000)
 
 typedef struct a_star_return_t {
     int x;
@@ -72,6 +77,11 @@ typedef struct hda_message_t {
 
 typedef struct hda_mq_t {
     hda_message_t *head;
+    void *start_chunk;
+    void *end_chunk;
+    hda_message_t *end_chunk_cap;
+    hda_message_t *end_chunk_len;
+    hda_message_t *bin;
 } hda_mq_t;
 
 typedef struct hda_argument_t {
@@ -89,13 +99,56 @@ typedef struct hda_argument_t {
 
 void hda_mq_init(hda_mq_t *mq) {
     mq->head = NULL;
+    mq->start_chunk = mmap(
+            NULL,
+            MSG_MEM_MAP_SIZE,
+            PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS,
+            -1, 0);
+    assert(mq->start_chunk != MAP_FAILED);
+    assert(mq->start_chunk != MAP_FAILED);
+    mq->end_chunk = mq->start_chunk;
+    mq->end_chunk_len = (hda_message_t *) mq->end_chunk + 1;
+    mq->end_chunk_cap = (hda_message_t *) ((size_t) mq->end_chunk + MSG_MEM_MAP_SIZE) - 1;
+    *(void **) mq = NULL;
+    mq->bin = NULL;
+}
+
+hda_message_t *alloc_msg(hda_mq_t *mq) {
+    if (mq->bin != NULL) {
+        hda_message_t *tmp = mq->bin;
+        mq->bin = tmp->next;
+        return tmp;
+    } else {
+        if (mq->end_chunk_len > mq->end_chunk_cap) {
+            void *new_chunk = mmap(
+                    (void *) ((size_t) mq->end_chunk + MSG_MEM_MAP_SIZE),
+                    MSG_MEM_MAP_SIZE,
+                    PROT_READ | PROT_WRITE,
+                    MAP_PRIVATE | MAP_ANONYMOUS,
+                    -1, 0);
+            assert(new_chunk != MAP_FAILED);
+            *(void **) mq->end_chunk = new_chunk;
+            mq->end_chunk = new_chunk;
+            mq->end_chunk_len = (hda_message_t *) new_chunk + 1;
+            mq->end_chunk_cap = (hda_message_t *) ((size_t) new_chunk + MSG_MEM_MAP_SIZE) - 1;
+            *(void **) new_chunk = NULL;
+        }
+        return mq->end_chunk_len++;
+    }
+}
+
+void free_msg(hda_mq_t *mq, hda_message_t *start_msg, hda_message_t *end_msg) {
+    end_msg->next = mq->bin;
+    mq->bin = start_msg;
 }
 
 void hda_mq_destroy(hda_mq_t *mq) {
-    hda_message_t *msg, *next_msg;
-    for (msg = mq->head; msg != NULL; msg = next_msg) {
-        next_msg = msg->next;
-        free(msg);
+    void *this_pool = mq->start_chunk;
+    while (this_pool != NULL) {
+        void *next_pool = *(void **) this_pool;
+        munmap(this_pool, MSG_MEM_MAP_SIZE);
+        this_pool = next_pool;
     }
 }
 
@@ -103,7 +156,7 @@ void *hda_star_search(hda_argument_t *args) {
     mem_pool_t mem_pool;
     heap_t heap;
     node_t *node, *other_node;
-    hda_message_t *msg, *next_msg;
+    hda_message_t *msg_start, *msg, *next_msg;
     size_t *msg_sent = &args->msg_sent[args->thread_id];
     size_t *msg_received = &args->msg_received[args->thread_id];
     hda_mq_t *msg_queue = &args->mqs[args->thread_id];
@@ -177,7 +230,7 @@ void *hda_star_search(hda_argument_t *args) {
                             id = hash_distribute(args->thread_num, x_axis[i], y_axis[i]);
                             mq = &args->mqs[id];
                             /* allocate new message. */
-                            new_msg = malloc(sizeof(hda_message_t));
+                            new_msg = alloc_msg(msg_queue);
                             new_msg->parent = node;
                             new_msg->x = x_axis[i];
                             new_msg->y = y_axis[i];
@@ -191,7 +244,7 @@ void *hda_star_search(hda_argument_t *args) {
                             "hda_mq_send_loop:                      "
                             "       mov         %%rax, %E[next];    "
                             "lock   cmpxchg     %[msg], %E[ptr];    "
-                            "       jnz         hda_mq_send_loop;   "
+                            "       jne         hda_mq_send_loop;   "
                             :
                             :[ptr] "r"(&mq->head),[next] "r"(&new_msg->next),[msg] "r"(new_msg)
                             :"rax", "cc", "memory");
@@ -218,42 +271,47 @@ void *hda_star_search(hda_argument_t *args) {
             }
         }
         /* receive message. */
-        msg = NULL;
+        msg_start = NULL;
 
         __asm__ __volatile__(
         "lock   xchg        %[msg], %E[ptr];    "
-        :[msg] "+r"(msg)
+        :[msg] "+r"(msg_start)
         :[ptr] "r"(&msg_queue->head)
         : "memory");
 
-        /* add all nodes in message queue. */
-        for (; msg != NULL; msg = next_msg) {
-            node_t **adj_ptr = &maze_node(args->maze, msg->x, msg->y);
-            node_t *adj = *adj_ptr;
-            /* if NULL, the node is not opened */
-            if (adj == NULL) {
-                /* allocate new node and modify maze.nodes. */
-                adj = node_init(alloc_node(&mem_pool), msg->x, msg->y);
-                *adj_ptr = adj;
-            }
-
-            /* update if improved. */
-            if (msg->gs < adj->gs) {
-                /* modify node. */
-                adj->parent = msg->parent;
-                adj->gs = msg->gs;
-                adj->fs = adj->gs + heuristic(adj, get_goal(args->maze));
-                if (adj->heap_id != 0) {
-                    heap_update(&heap, adj);
-                    ++*msg_received;
-                } else {
-                    heap_insert(&heap, adj);
+        msg = msg_start;
+        if (msg != NULL) {
+            /* add all nodes in message queue. */
+            while (1) {
+                node_t **adj_ptr = &maze_node(args->maze, msg->x, msg->y);
+                node_t *adj = *adj_ptr;
+                /* if NULL, the node is not opened */
+                if (adj == NULL) {
+                    /* allocate new node and modify maze.nodes. */
+                    adj = node_init(alloc_node(&mem_pool), msg->x, msg->y);
+                    *adj_ptr = adj;
                 }
-            } else {
-                ++*msg_received;
+
+                /* update if improved. */
+                if (msg->gs < adj->gs) {
+                    /* modify node. */
+                    adj->parent = msg->parent;
+                    adj->gs = msg->gs;
+                    adj->fs = adj->gs + heuristic(adj, get_goal(args->maze));
+                    if (adj->heap_id != 0) {
+                        heap_update(&heap, adj);
+                        ++*msg_received;
+                    } else {
+                        heap_insert(&heap, adj);
+                    }
+                } else {
+                    ++*msg_received;
+                }
+                next_msg = msg->next;
+                if (next_msg == NULL) break;
+                msg = next_msg;
             }
-            next_msg = msg->next;
-            free(msg);
+            free_msg(msg_queue, msg_start, msg);
         }
     }
 
@@ -319,7 +377,7 @@ int main(int argc, char *argv[]) {
     maze_t *maze_start = NULL, *maze_goal = NULL;
     pthread_mutex_t *return_value_mutex = NULL;
     a_star_return_t *return_value = NULL;
-    size_t thread_num = get_nprocs();
+    size_t thread_num = (size_t) get_nprocs();
     size_t *finished = NULL;
     a_star_argument_t *argument_start = NULL, *argument_goal = NULL;
     pthread_t from_start, from_goal;

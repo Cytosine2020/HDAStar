@@ -12,7 +12,7 @@
 #define _NODE_H_
 
 #define node_less(n1, n2)   ((n1)->fs < (n2)->fs)
-#define MEM_MAP_SIZE        (0x4000)
+#define NODE_MEM_MAP_SIZE        (0x10000)
 
 
 /**

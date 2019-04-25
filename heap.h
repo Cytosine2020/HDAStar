@@ -13,8 +13,8 @@
 
 #include "node.h"
 
-/* Define initial capacity to be 512. */
-#define INIT_CAPACITY 512
+/* Define initial capacity to be 1000. */
+#define INIT_CAPACITY 1000
 
 
 /**
