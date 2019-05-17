@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Wpedantic -Wextra -Werror -lpthread -pthread -std=c89 
+CFLAGS=-Wall -Wpedantic -Wextra -Werror -lpthread -pthread -std=c89
 
 TARGET=astar
 

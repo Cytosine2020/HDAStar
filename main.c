@@ -106,7 +106,6 @@ void hda_mq_init(hda_mq_t *mq) {
             MAP_PRIVATE | MAP_ANONYMOUS,
             -1, 0);
     assert(mq->start_chunk != MAP_FAILED);
-    assert(mq->start_chunk != MAP_FAILED);
     mq->end_chunk = mq->start_chunk;
     mq->end_chunk_len = (hda_message_t *) mq->end_chunk + 1;
     mq->end_chunk_cap = (hda_message_t *) ((size_t) mq->end_chunk + MSG_MEM_MAP_SIZE) - 1;
