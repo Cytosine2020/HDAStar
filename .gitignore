@@ -4,3 +4,4 @@ cmake-build*/*
 *.o
 astar
 *.tar
+astar.asm
