@@ -8,10 +8,10 @@ all: $(TARGET)
 $(TARGET): main.c node.o maze.o heap.o compass.h
 	${CC} ${CFLAGS} $^ -o $@
 
-maze.o: maze.c maze.h maze.o
+maze.o: maze.c maze.h
 	${CC} ${CFLAGS} -c $< -o $@
 
-heap.o: heap.c heap.h heap.o
+heap.o: heap.c heap.h
 	${CC} ${CFLAGS} -c $< -o $@
 
 node.o: node.c node.h

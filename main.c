@@ -42,6 +42,7 @@
 #include <limits.h>
 #include <sys/mman.h>
 #include <sys/sysinfo.h>
+#include <omp.h>
 
 #include "heap.h"
 #include "node.h"
@@ -77,11 +78,13 @@ typedef struct hda_message_t {
 
 typedef struct hda_mq_t {
     hda_message_t *head;
+    void *padding_1[15];
     void *start_chunk;
     void *end_chunk;
     hda_message_t *end_chunk_cap;
     hda_message_t *end_chunk_len;
     hda_message_t *bin;
+    void *padding_2[11];
 } hda_mq_t;
 
 typedef struct hda_argument_t {
