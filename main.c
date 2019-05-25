@@ -77,7 +77,7 @@ typedef struct hda_message_t {
 } hda_message_t;
 
 typedef struct hda_mq_t {
-    hda_message_t *head;
+    hda_message_t * volatile head;
     void *padding_1[15];
     void *start_chunk;
     void *end_chunk;
@@ -240,7 +240,10 @@ void *hda_star_search(hda_argument_t *args) {
                             /* message sent add one */
                             ++*msg_sent;
                             /* send message. */
-
+							do {
+								new_msg->next = mq->head;
+							} while (!__atomic_compare_exchange_n(&mq->head, &new_msg->next, new_msg, 1, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED));
+							/*
                             __asm__ __volatile__(
                             "       mov         %E[ptr], %%rax;     "
                             "hda_mq_send_loop:                      "
@@ -249,7 +252,7 @@ void *hda_star_search(hda_argument_t *args) {
                             "       jne         hda_mq_send_loop;   "
                             :
                             :[ptr] "r"(&mq->head),[next] "r"(&new_msg->next),[msg] "r"(new_msg)
-                            :"rax", "cc", "memory");
+                            :"rax", "cc", "memory");*/
                         }
                     }
                 }
@@ -273,13 +276,15 @@ void *hda_star_search(hda_argument_t *args) {
             }
         }
         /* receive message. */
+		msg_start = __atomic_exchange_n(&msg_queue->head, NULL, __ATOMIC_ACQUIRE);
+		/*
         msg_start = NULL;
-
         __asm__ __volatile__(
         "lock   xchg        %[msg], %E[ptr];    "
         :[msg] "+r"(msg_start)
         :[ptr] "r"(&msg_queue->head)
         : "memory");
+		*/
 
         msg = msg_start;
         if (msg != NULL) {
